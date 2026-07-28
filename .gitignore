@@ -1,0 +1,8 @@
+# Local security state and build caches
+.latch/
+.cache/
+bin/
+
+# Editor and OS files
+.DS_Store
+Thumbs.db

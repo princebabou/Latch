@@ -1,0 +1,4 @@
+{"agent_id":"demo-agent","tool":"filesystem.read","arguments":{"path":"./README.md"}}
+{"agent_id":"demo-agent","tool":"filesystem.read","arguments":{"path":"~/.ssh/id_rsa"}}
+{"agent_id":"demo-agent","tool":"shell.exec","arguments":{"command":"npm test"}}
+{"agent_id":"demo-agent","tool":"shell.exec","arguments":{"command":"rm -rf ./data"}}

@@ -1,0 +1,52 @@
+# Latch policy: explicit BLOCK rules always override approval and allow rules.
+version: 1
+
+enforcement:
+  # Actions without a matching policy are escalated by deterministic risk score.
+  approval_threshold: 40
+  block_threshold: 90
+
+audit:
+  path: .latch/audit.jsonl
+  terminal: true
+
+rules:
+  - id: block-private-keys
+    description: Private keys are never available to AI agents.
+    priority: 100
+    match:
+      path:
+        - "~/.ssh/**"
+        - "**/*.pem"
+        - "**/*.key"
+    action: block
+
+  - id: block-environment-files
+    description: Environment files often contain unscoped credentials.
+    priority: 100
+    match:
+      path:
+        - "**/.env"
+        - "**/.env.*"
+    action: block
+
+  - id: block-system-passwords
+    description: Password hash files are prohibited.
+    priority: 100
+    match:
+      path: "/etc/shadow"
+    action: block
+
+  - id: shell-needs-approval
+    description: Shell execution requires a human decision.
+    match:
+      tool: shell.exec
+    action: require_approval
+
+  - id: production-write-needs-approval
+    description: Production writes require explicit approval.
+    match:
+      action: write
+      arguments:
+        environment: production
+    action: require_approval
