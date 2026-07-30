@@ -9,8 +9,8 @@ coverage.out
 *.log
 *.tmp
 
-latch
-latch.exe
+/latch
+/latch.exe
 
 # Editor and OS files
 .DS_Store
