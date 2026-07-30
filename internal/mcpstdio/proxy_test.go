@@ -5,7 +5,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"sync"
@@ -17,6 +19,23 @@ import (
 	"github.com/princebabou/Latch/internal/policy"
 	"github.com/princebabou/Latch/pkg/models"
 )
+
+func TestWriteMessageAvoidsSizeArithmeticAndHandlesPartialWrites(t *testing.T) {
+	writer := &chunkWriter{max: 2}
+	if err := writeMessage(writer, []byte("hello")); err != nil {
+		t.Fatal(err)
+	}
+	if got := writer.buffer.String(); got != "hello\n" {
+		t.Fatalf("output = %q, want %q", got, "hello\n")
+	}
+}
+
+func TestWriteMessageFailsOnWriterWithoutProgress(t *testing.T) {
+	err := writeMessage(zeroWriter{}, []byte("message"))
+	if !errors.Is(err, io.ErrShortWrite) {
+		t.Fatalf("error = %v, want io.ErrShortWrite", err)
+	}
+}
 
 func TestProxyForwardsAllowedToolCallAndSessionTraffic(t *testing.T) {
 	logger := &memoryLogger{}
@@ -404,6 +423,22 @@ type memoryLogger struct {
 type failingLogger struct{}
 
 func (failingLogger) Write(models.AuditEvent) error { return fmt.Errorf("test audit failure") }
+
+type chunkWriter struct {
+	buffer bytes.Buffer
+	max    int
+}
+
+func (writer *chunkWriter) Write(payload []byte) (int, error) {
+	if len(payload) > writer.max {
+		payload = payload[:writer.max]
+	}
+	return writer.buffer.Write(payload)
+}
+
+type zeroWriter struct{}
+
+func (zeroWriter) Write([]byte) (int, error) { return 0, nil }
 
 func (l *memoryLogger) Write(event models.AuditEvent) error {
 	l.mu.Lock()

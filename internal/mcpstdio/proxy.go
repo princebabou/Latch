@@ -420,15 +420,19 @@ func readMessage(reader *bufio.Reader, maxBytes int) ([]byte, error) {
 }
 
 func writeMessage(writer io.Writer, message []byte) error {
-	payload := make([]byte, 0, len(message)+1)
-	payload = append(payload, message...)
-	payload = append(payload, '\n')
+	if err := writeAll(writer, message); err != nil {
+		return err
+	}
+	return writeAll(writer, []byte{'\n'})
+}
+
+func writeAll(writer io.Writer, payload []byte) error {
 	for len(payload) > 0 {
 		written, err := writer.Write(payload)
 		if err != nil {
 			return err
 		}
-		if written == 0 {
+		if written <= 0 || written > len(payload) {
 			return io.ErrShortWrite
 		}
 		payload = payload[written:]
