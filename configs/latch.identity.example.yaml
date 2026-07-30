@@ -1,0 +1,74 @@
+# Production-oriented local identity policy for an MCP stdio launcher.
+version: 1
+
+enforcement:
+  approval_threshold: 40
+  block_threshold: 90
+  allow_unsafe_overrides: false
+
+identity:
+  require_verified: true
+  enforce_capabilities: true
+  agents:
+    - id: desktop-agent
+      aliases:
+        - Claude Desktop
+      capabilities:
+        - id: workspace-read
+          description: Read files in the checked-out workspace.
+          match:
+            tool: filesystem.read
+            action: read
+            path: "./**"
+        - id: project-tests
+          description: Run the project's test command.
+          match:
+            tool: shell.exec
+            command: "npm test"
+
+budgets:
+  store_path: .latch/budgets.json
+  lock_timeout: 2s
+  rules:
+    - id: workspace-read-burst
+      description: Bound cumulative workspace reads by this agent.
+      match:
+        tool: filesystem.read
+        action: read
+        path: "./**"
+      max_actions: 100
+      window: 5m
+    - id: project-test-burst
+      description: Prevent runaway test command loops.
+      match:
+        tool: shell.exec
+        command: "npm test"
+      max_actions: 5
+      window: 10m
+
+approvals:
+  store_path: .latch/approvals.json
+  default_ttl: 15m
+  max_ttl: 24h
+  lock_timeout: 2s
+
+audit:
+  path: .latch/audit.jsonl
+  terminal: true
+
+rules:
+  - id: block-private-keys
+    description: Private keys are never available to AI agents.
+    priority: 100
+    match:
+      path:
+        - "~/.ssh/**"
+        - "**/*.pem"
+        - "**/*.key"
+    action: block
+
+  - id: shell-needs-approval
+    description: Shell execution requires a human decision.
+    match:
+      tool: shell.exec
+    action: require_approval

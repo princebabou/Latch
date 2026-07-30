@@ -6,7 +6,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/latch-security/latch/pkg/models"
+	"github.com/princebabou/Latch/pkg/models"
 )
 
 // Request is intentionally small: MCP adapters can map their tool call into it,
@@ -31,14 +31,27 @@ func Action(req Request) (models.Action, error) {
 	}
 
 	action := models.Action{
-		AgentID: req.AgentID, Tool: tool, Operation: operationFor(tool),
+		AgentID: req.AgentID, Tool: tool, Operation: operationFor(tool, args),
 		Arguments: args, Metadata: req.Metadata,
 	}
 	action.Resource = resourceFor(tool, args)
 	return action, nil
 }
 
-func operationFor(tool string) string {
+func operationFor(tool string, arguments map[string]any) string {
+	if explicit := normalizedOperation(stringValue(arguments, "operation", "action")); explicit != "" {
+		return explicit
+	}
+	if _, ok := lookupValue(arguments, "command", "cmd", "script", "executable", "program"); ok {
+		return "execute"
+	}
+	if _, ok := lookupValue(arguments, "query", "sql", "statement"); ok {
+		return "query"
+	}
+	if _, ok := lookupValue(arguments, "url", "endpoint", "uri", "request_url", "base_url"); ok {
+		return "network"
+	}
+
 	lower := strings.ToLower(tool)
 	switch {
 	case strings.Contains(lower, "read"):
@@ -60,7 +73,7 @@ func operationFor(tool string) string {
 
 func resourceFor(tool string, args map[string]any) string {
 	for _, key := range []string{"path", "file", "filename", "url", "endpoint", "host", "table", "database", "command", "query"} {
-		if value, ok := args[key]; ok {
+		if value, ok := lookupValue(args, key); ok {
 			if s, ok := value.(string); ok {
 				if key == "url" || key == "endpoint" {
 					if parsed, err := url.Parse(s); err == nil && parsed.Host != "" {
@@ -72,4 +85,48 @@ func resourceFor(tool string, args map[string]any) string {
 		}
 	}
 	return ""
+}
+
+func normalizedOperation(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "read", "get", "list", "search":
+		return "read"
+	case "write", "update", "create", "put", "patch", "insert":
+		return "write"
+	case "delete", "remove", "drop", "truncate":
+		return "delete"
+	case "execute", "exec", "run", "shell":
+		return "execute"
+	case "query", "select", "sql":
+		return "query"
+	case "network", "request", "fetch", "http":
+		return "network"
+	default:
+		return ""
+	}
+}
+
+func stringValue(arguments map[string]any, keys ...string) string {
+	value, ok := lookupValue(arguments, keys...)
+	if !ok {
+		return ""
+	}
+	text, _ := value.(string)
+	return text
+}
+
+func lookupValue(arguments map[string]any, keys ...string) (any, bool) {
+	for _, key := range keys {
+		if value, ok := arguments[key]; ok {
+			return value, true
+		}
+	}
+	for existingKey, value := range arguments {
+		for _, key := range keys {
+			if strings.EqualFold(existingKey, key) {
+				return value, true
+			}
+		}
+	}
+	return nil, false
 }

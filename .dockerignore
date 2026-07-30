@@ -1,0 +1,9 @@
+.git
+.github
+.cache
+.latch
+bin
+dist
+coverage.out
+*.log
+*.tmp

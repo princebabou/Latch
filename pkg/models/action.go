@@ -15,6 +15,15 @@ type Action struct {
 	Metadata  map[string]any `json:"metadata,omitempty"`
 }
 
+// IdentityContext is transport-authenticated context supplied by a trusted
+// adapter. It is deliberately separate from Action.Metadata, which may contain
+// untrusted protocol input.
+type IdentityContext struct {
+	ID       string `json:"id"`
+	Verified bool   `json:"verified"`
+	Source   string `json:"source"`
+}
+
 // Decision is the outcome that must be enforced before an action is executed.
 type Decision string
 
@@ -31,14 +40,34 @@ type RiskSignal struct {
 	Description string `json:"description"`
 }
 
+// BudgetStatus explains current state for one cumulative action limit.
+type BudgetStatus struct {
+	RuleID      string `json:"rule_id"`
+	Description string `json:"description,omitempty"`
+	Limit       int    `json:"limit"`
+	Used        int    `json:"used"`
+	Remaining   int    `json:"remaining"`
+	Window      string `json:"window"`
+	RetryAfter  string `json:"retry_after,omitempty"`
+	Exceeded    bool   `json:"exceeded"`
+}
+
 // Assessment is the complete pre-execution security verdict.
 type Assessment struct {
-	Decision       Decision     `json:"decision"`
-	RiskScore      int          `json:"risk_score"`
-	RiskLevel      string       `json:"risk_level"`
-	Signals        []RiskSignal `json:"signals,omitempty"`
-	TriggeredRules []string     `json:"triggered_rules,omitempty"`
-	Reasons        []string     `json:"reasons,omitempty"`
+	Decision            Decision       `json:"decision"`
+	DecisionSource      string         `json:"decision_source"`
+	RiskScore           int            `json:"risk_score"`
+	RiskLevel           string         `json:"risk_level"`
+	HardDeny            bool           `json:"hard_deny"`
+	UnsafeOverride      bool           `json:"unsafe_override,omitempty"`
+	IdentityVerified    bool           `json:"identity_verified"`
+	IdentitySource      string         `json:"identity_source,omitempty"`
+	CanonicalAgentID    string         `json:"canonical_agent_id,omitempty"`
+	MatchedCapabilities []string       `json:"matched_capabilities,omitempty"`
+	Budgets             []BudgetStatus `json:"budgets,omitempty"`
+	Signals             []RiskSignal   `json:"signals,omitempty"`
+	TriggeredRules      []string       `json:"triggered_rules,omitempty"`
+	Reasons             []string       `json:"reasons,omitempty"`
 }
 
 // AuditEvent is a durable, redacted record of one enforcement decision.

@@ -2,13 +2,19 @@
 package policy
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
-	"github.com/latch-security/latch/pkg/models"
+	"github.com/princebabou/Latch/internal/risk"
+	"github.com/princebabou/Latch/pkg/models"
 	"gopkg.in/yaml.v3"
 )
 
@@ -35,15 +41,82 @@ func (s *StringList) UnmarshalYAML(value *yaml.Node) error {
 
 // Config is the complete policy document.
 type Config struct {
-	Version     int         `yaml:"version"`
-	Enforcement Enforcement `yaml:"enforcement"`
-	Audit       Audit       `yaml:"audit"`
-	Rules       []Rule      `yaml:"rules"`
+	Version     int            `yaml:"version"`
+	Enforcement Enforcement    `yaml:"enforcement"`
+	Identity    IdentityConfig `yaml:"identity"`
+	Budgets     BudgetConfig   `yaml:"budgets"`
+	Approvals   ApprovalConfig `yaml:"approvals"`
+	Audit       Audit          `yaml:"audit"`
+	Rules       []Rule         `yaml:"rules"`
+}
+
+// Duration is a YAML-friendly time.Duration with strict human-readable input.
+type Duration time.Duration
+
+func (d *Duration) UnmarshalYAML(value *yaml.Node) error {
+	var raw string
+	if err := value.Decode(&raw); err != nil {
+		return fmt.Errorf("duration must be a string such as 15m or 24h: %w", err)
+	}
+	parsed, err := time.ParseDuration(raw)
+	if err != nil {
+		return fmt.Errorf("invalid duration %q: %w", raw, err)
+	}
+	*d = Duration(parsed)
+	return nil
+}
+
+func (d Duration) Value() time.Duration { return time.Duration(d) }
+func (d Duration) String() string       { return time.Duration(d).String() }
+
+type ApprovalConfig struct {
+	StorePath   string   `yaml:"store_path"`
+	DefaultTTL  Duration `yaml:"default_ttl"`
+	MaxTTL      Duration `yaml:"max_ttl"`
+	LockTimeout Duration `yaml:"lock_timeout"`
+}
+
+// BudgetConfig defines durable, per-agent limits for cumulative action volume.
+// Budget rules are security ceilings and cannot be bypassed by policy allows,
+// approvals, or unsafe overrides.
+type BudgetConfig struct {
+	StorePath   string       `yaml:"store_path" json:"-"`
+	LockTimeout Duration     `yaml:"lock_timeout" json:"-"`
+	Rules       []BudgetRule `yaml:"rules" json:"rules,omitempty"`
+}
+
+type BudgetRule struct {
+	ID          string   `yaml:"id" json:"id"`
+	Description string   `yaml:"description" json:"description,omitempty"`
+	Match       Match    `yaml:"match" json:"match"`
+	MaxActions  int      `yaml:"max_actions" json:"max_actions"`
+	Window      Duration `yaml:"window" json:"window"`
+}
+
+// IdentityConfig controls whether a transport-authenticated agent identity is
+// mandatory and whether registered capabilities form a maximum permission set.
+type IdentityConfig struct {
+	RequireVerified     bool            `yaml:"require_verified" json:"require_verified"`
+	EnforceCapabilities bool            `yaml:"enforce_capabilities" json:"enforce_capabilities"`
+	Agents              []AgentIdentity `yaml:"agents" json:"agents,omitempty"`
+}
+
+type AgentIdentity struct {
+	ID           string       `yaml:"id" json:"id"`
+	Aliases      StringList   `yaml:"aliases" json:"aliases,omitempty"`
+	Capabilities []Capability `yaml:"capabilities" json:"capabilities,omitempty"`
+}
+
+type Capability struct {
+	ID          string `yaml:"id" json:"id"`
+	Description string `yaml:"description" json:"description,omitempty"`
+	Match       Match  `yaml:"match" json:"match"`
 }
 
 type Enforcement struct {
-	ApprovalThreshold int `yaml:"approval_threshold"`
-	BlockThreshold    int `yaml:"block_threshold"`
+	ApprovalThreshold    int  `yaml:"approval_threshold"`
+	BlockThreshold       int  `yaml:"block_threshold"`
+	AllowUnsafeOverrides bool `yaml:"allow_unsafe_overrides"`
 }
 
 type Audit struct {
@@ -52,23 +125,24 @@ type Audit struct {
 }
 
 type Rule struct {
-	ID          string          `yaml:"id"`
-	Description string          `yaml:"description"`
-	Priority    int             `yaml:"priority"`
-	Match       Match           `yaml:"match"`
-	Action      models.Decision `yaml:"action"`
+	ID             string          `yaml:"id"`
+	Description    string          `yaml:"description"`
+	Priority       int             `yaml:"priority"`
+	UnsafeOverride bool            `yaml:"unsafe_override"`
+	Match          Match           `yaml:"match"`
+	Action         models.Decision `yaml:"action"`
 }
 
 type Match struct {
-	Tool              StringList            `yaml:"tool"`
-	Action            StringList            `yaml:"action"`
-	Path              StringList            `yaml:"path"`
-	Command           StringList            `yaml:"command"`
-	Hostname          StringList            `yaml:"hostname"`
-	URL               StringList            `yaml:"url"`
-	DatabaseOperation StringList            `yaml:"database_operation"`
-	HTTPMethod        StringList            `yaml:"http_method"`
-	Arguments         map[string]StringList `yaml:"arguments"`
+	Tool              StringList            `yaml:"tool" json:"tool,omitempty"`
+	Action            StringList            `yaml:"action" json:"action,omitempty"`
+	Path              StringList            `yaml:"path" json:"path,omitempty"`
+	Command           StringList            `yaml:"command" json:"command,omitempty"`
+	Hostname          StringList            `yaml:"hostname" json:"hostname,omitempty"`
+	URL               StringList            `yaml:"url" json:"url,omitempty"`
+	DatabaseOperation StringList            `yaml:"database_operation" json:"database_operation,omitempty"`
+	HTTPMethod        StringList            `yaml:"http_method" json:"http_method,omitempty"`
+	Arguments         map[string]StringList `yaml:"arguments" json:"arguments,omitempty"`
 }
 
 // Result contains every matching policy rule, including lower-precedence rules,
@@ -82,7 +156,14 @@ func DefaultConfig() Config {
 	return Config{
 		Version:     1,
 		Enforcement: Enforcement{ApprovalThreshold: 40, BlockThreshold: 90},
-		Audit:       Audit{Path: ".latch/audit.jsonl", Terminal: true},
+		Approvals: ApprovalConfig{
+			StorePath: ".latch/approvals.json", DefaultTTL: Duration(15 * time.Minute),
+			MaxTTL: Duration(24 * time.Hour), LockTimeout: Duration(2 * time.Second),
+		},
+		Budgets: BudgetConfig{
+			StorePath: ".latch/budgets.json", LockTimeout: Duration(2 * time.Second),
+		},
+		Audit: Audit{Path: ".latch/audit.jsonl", Terminal: true},
 	}
 }
 
@@ -99,10 +180,26 @@ func Load(path string) (Config, error) {
 	for index := range config.Rules {
 		config.Rules[index].Action = models.Decision(strings.ToUpper(strings.TrimSpace(string(config.Rules[index].Action))))
 	}
+	absolutePath, err := filepath.Abs(path)
+	if err != nil {
+		return Config{}, fmt.Errorf("resolve policy path: %w", err)
+	}
+	baseDirectory := filepath.Dir(absolutePath)
+	config.Approvals.StorePath = resolveOperationalPath(baseDirectory, config.Approvals.StorePath)
+	config.Budgets.StorePath = resolveOperationalPath(baseDirectory, config.Budgets.StorePath)
+	config.Audit.Path = resolveOperationalPath(baseDirectory, config.Audit.Path)
 	if err := config.Validate(); err != nil {
 		return Config{}, err
 	}
 	return config, nil
+}
+
+func resolveOperationalPath(baseDirectory, path string) string {
+	path = strings.TrimSpace(path)
+	if path == "" || filepath.IsAbs(path) {
+		return path
+	}
+	return filepath.Clean(filepath.Join(baseDirectory, path))
 }
 
 func (c Config) Validate() error {
@@ -117,6 +214,27 @@ func (c Config) Validate() error {
 	}
 	if c.Enforcement.ApprovalThreshold >= c.Enforcement.BlockThreshold {
 		return fmt.Errorf("approval threshold must be lower than block threshold")
+	}
+	if strings.TrimSpace(c.Approvals.StorePath) == "" {
+		return fmt.Errorf("approvals.store_path is required")
+	}
+	if c.Approvals.DefaultTTL.Value() <= 0 {
+		return fmt.Errorf("approvals.default_ttl must be positive")
+	}
+	if c.Approvals.MaxTTL.Value() <= 0 || c.Approvals.DefaultTTL.Value() > c.Approvals.MaxTTL.Value() {
+		return fmt.Errorf("approvals.max_ttl must be positive and at least default_ttl")
+	}
+	if c.Approvals.LockTimeout.Value() <= 0 {
+		return fmt.Errorf("approvals.lock_timeout must be positive")
+	}
+	if err := c.Budgets.validate(); err != nil {
+		return err
+	}
+	if len(c.Budgets.Rules) > 0 && !c.Identity.RequireVerified {
+		return fmt.Errorf("budgets require identity.require_verified: true")
+	}
+	if err := c.Identity.validate(); err != nil {
+		return err
 	}
 	ids := map[string]bool{}
 	for index, rule := range c.Rules {
@@ -135,8 +253,260 @@ func (c Config) Validate() error {
 		if rule.Match.empty() {
 			return fmt.Errorf("rule %q: match must contain at least one condition", rule.ID)
 		}
+		if rule.UnsafeOverride {
+			if rule.Action != models.DecisionAllow {
+				return fmt.Errorf("rule %q: unsafe_override is valid only for ALLOW rules", rule.ID)
+			}
+			if !c.Enforcement.AllowUnsafeOverrides {
+				return fmt.Errorf("rule %q: unsafe_override requires enforcement.allow_unsafe_overrides: true", rule.ID)
+			}
+			if strings.TrimSpace(rule.Description) == "" {
+				return fmt.Errorf("rule %q: unsafe_override requires a description", rule.ID)
+			}
+			if !rule.Match.resourceSpecific() {
+				return fmt.Errorf("rule %q: unsafe_override must match a path, command, URL, hostname, database operation, HTTP method, or argument", rule.ID)
+			}
+		}
 	}
 	return nil
+}
+
+func (budgets BudgetConfig) validate() error {
+	const (
+		maxBudgetRules   = 128
+		maxBudgetActions = 10_000
+		maxBudgetWindow  = 365 * 24 * time.Hour
+	)
+	if len(budgets.Rules) == 0 {
+		return nil
+	}
+	if len(budgets.Rules) > maxBudgetRules {
+		return fmt.Errorf("budgets.rules cannot contain more than %d rules", maxBudgetRules)
+	}
+	if strings.TrimSpace(budgets.StorePath) == "" {
+		return fmt.Errorf("budgets.store_path is required when budget rules are configured")
+	}
+	if budgets.LockTimeout.Value() <= 0 {
+		return fmt.Errorf("budgets.lock_timeout must be positive when budget rules are configured")
+	}
+	ids := make(map[string]bool)
+	for index, rule := range budgets.Rules {
+		ruleID := strings.TrimSpace(rule.ID)
+		if ruleID == "" {
+			return fmt.Errorf("budgets.rules[%d]: id is required", index)
+		}
+		if ruleID != rule.ID {
+			return fmt.Errorf("budget rule id %q cannot contain leading or trailing whitespace", rule.ID)
+		}
+		key := strings.ToLower(ruleID)
+		if ids[key] {
+			return fmt.Errorf("duplicate budget rule id %q", ruleID)
+		}
+		ids[key] = true
+		if rule.Match.empty() {
+			return fmt.Errorf("budget rule %q must contain at least one match condition", ruleID)
+		}
+		if rule.MaxActions <= 0 {
+			return fmt.Errorf("budget rule %q max_actions must be positive", ruleID)
+		}
+		if rule.MaxActions > maxBudgetActions {
+			return fmt.Errorf("budget rule %q max_actions cannot exceed %d", ruleID, maxBudgetActions)
+		}
+		if rule.Window.Value() <= 0 {
+			return fmt.Errorf("budget rule %q window must be positive", ruleID)
+		}
+		if rule.Window.Value() > maxBudgetWindow {
+			return fmt.Errorf("budget rule %q window cannot exceed %s", ruleID, maxBudgetWindow)
+		}
+	}
+	return nil
+}
+
+func (identity IdentityConfig) validate() error {
+	if identity.EnforceCapabilities && !identity.RequireVerified {
+		return fmt.Errorf("identity.enforce_capabilities requires identity.require_verified: true")
+	}
+	if identity.EnforceCapabilities && len(identity.Agents) == 0 {
+		return fmt.Errorf("identity.enforce_capabilities requires at least one registered agent")
+	}
+	principals := make(map[string]string)
+	for agentIndex, agent := range identity.Agents {
+		agentID := strings.TrimSpace(agent.ID)
+		if agentID == "" {
+			return fmt.Errorf("identity.agents[%d]: id is required", agentIndex)
+		}
+		if agentID != agent.ID {
+			return fmt.Errorf("identity agent id %q cannot contain leading or trailing whitespace", agent.ID)
+		}
+		for _, principal := range append([]string{agentID}, agent.Aliases...) {
+			trimmedPrincipal := strings.TrimSpace(principal)
+			if trimmedPrincipal == "" {
+				return fmt.Errorf("identity agent %q: aliases cannot be empty", agentID)
+			}
+			if trimmedPrincipal != principal {
+				return fmt.Errorf("identity principal %q cannot contain leading or trailing whitespace", principal)
+			}
+			key := strings.ToLower(trimmedPrincipal)
+			if owner, exists := principals[key]; exists {
+				return fmt.Errorf("identity principal %q is assigned to both %q and %q", principal, owner, agentID)
+			}
+			principals[key] = agentID
+		}
+		capabilityIDs := make(map[string]bool)
+		for capabilityIndex, capability := range agent.Capabilities {
+			capabilityID := strings.TrimSpace(capability.ID)
+			if capabilityID == "" {
+				return fmt.Errorf("identity agent %q capabilities[%d]: id is required", agentID, capabilityIndex)
+			}
+			if capabilityID != capability.ID {
+				return fmt.Errorf("identity agent %q capability id %q cannot contain leading or trailing whitespace", agentID, capability.ID)
+			}
+			key := strings.ToLower(capabilityID)
+			if capabilityIDs[key] {
+				return fmt.Errorf("identity agent %q has duplicate capability id %q", agentID, capabilityID)
+			}
+			capabilityIDs[key] = true
+			if capability.Match.empty() {
+				return fmt.Errorf("identity agent %q capability %q must contain at least one match condition", agentID, capabilityID)
+			}
+		}
+	}
+	return nil
+}
+
+// Digest identifies the security semantics that an approval grant was issued
+// against. Operational output and storage locations are intentionally excluded.
+func Digest(config Config) (string, error) {
+	material := struct {
+		Version     int
+		Enforcement Enforcement
+		Identity    IdentityConfig
+		Budgets     []BudgetRule
+		Approvals   struct {
+			DefaultTTL Duration
+			MaxTTL     Duration
+		}
+		Rules []Rule
+	}{
+		Version:     config.Version,
+		Enforcement: config.Enforcement,
+		Identity:    config.Identity,
+		Budgets:     config.Budgets.Rules,
+		Rules:       config.Rules,
+	}
+	material.Approvals.DefaultTTL = config.Approvals.DefaultTTL
+	material.Approvals.MaxTTL = config.Approvals.MaxTTL
+	encoded, err := json.Marshal(material)
+	if err != nil {
+		return "", fmt.Errorf("encode policy digest: %w", err)
+	}
+	sum := sha256.Sum256(encoded)
+	return hex.EncodeToString(sum[:]), nil
+}
+
+type IdentityResult struct {
+	Allowed             bool
+	DecisionSource      string
+	Reason              string
+	CanonicalAgentID    string
+	KnownAgent          bool
+	MatchedCapabilities []string
+}
+
+// AuthorizeIdentity evaluates transport trust and the configured capability
+// ceiling independently from ordinary allow, approval, and break-glass rules.
+func AuthorizeIdentity(config Config, identity models.IdentityContext, action models.Action) IdentityResult {
+	identity.ID = strings.TrimSpace(identity.ID)
+	actionClaim := strings.TrimSpace(action.AgentID)
+	if identity.ID == "" {
+		identity.ID = actionClaim
+	}
+	if identity.Source == "" {
+		identity.Source = "self_asserted"
+	}
+
+	canonicalIdentity, knownIdentity := canonicalAgent(config.Identity, identity.ID)
+	canonicalAction, _ := canonicalAgent(config.Identity, actionClaim)
+	if canonicalIdentity == "" {
+		canonicalIdentity = identity.ID
+	}
+	if canonicalAction == "" {
+		canonicalAction = actionClaim
+	}
+	result := IdentityResult{
+		Allowed:          true,
+		CanonicalAgentID: canonicalIdentity,
+		KnownAgent:       knownIdentity,
+	}
+
+	if identity.ID != "" && actionClaim != "" && !strings.EqualFold(canonicalIdentity, canonicalAction) {
+		result.Allowed = false
+		result.DecisionSource = "identity_mismatch"
+		result.Reason = fmt.Sprintf("Trusted identity %q does not match action claim %q", identity.ID, actionClaim)
+		return result
+	}
+	if config.Identity.RequireVerified && !identity.Verified {
+		result.Allowed = false
+		result.DecisionSource = "identity_unverified"
+		result.Reason = fmt.Sprintf("Agent identity %q was self-asserted by %s", identity.ID, identity.Source)
+		return result
+	}
+
+	if knownIdentity {
+		for _, agent := range config.Identity.Agents {
+			if !strings.EqualFold(agent.ID, canonicalIdentity) {
+				continue
+			}
+			for _, capability := range agent.Capabilities {
+				if matches(capability.Match, action) {
+					result.MatchedCapabilities = append(result.MatchedCapabilities, capability.ID)
+				}
+			}
+			break
+		}
+	}
+	if config.Identity.EnforceCapabilities {
+		if !knownIdentity {
+			result.Allowed = false
+			result.DecisionSource = "identity_unknown"
+			result.Reason = fmt.Sprintf("Agent identity %q is not registered", identity.ID)
+			return result
+		}
+		if len(result.MatchedCapabilities) == 0 {
+			result.Allowed = false
+			result.DecisionSource = "capability_denied"
+			result.Reason = fmt.Sprintf("Agent %q has no capability matching this action", canonicalIdentity)
+			return result
+		}
+	}
+	return result
+}
+
+func canonicalAgent(config IdentityConfig, claim string) (string, bool) {
+	claim = strings.TrimSpace(claim)
+	if claim == "" {
+		return "", false
+	}
+	for _, agent := range config.Agents {
+		if strings.EqualFold(agent.ID, claim) {
+			return agent.ID, true
+		}
+		for _, alias := range agent.Aliases {
+			if strings.EqualFold(alias, claim) {
+				return agent.ID, true
+			}
+		}
+	}
+	return claim, false
+}
+
+// CanonicalAgentID resolves a configured ID or alias to the stable agent ID.
+func CanonicalAgentID(config Config, claim string) (string, bool) {
+	return canonicalAgent(config.Identity, claim)
+}
+
+func (m Match) resourceSpecific() bool {
+	return len(m.Path) > 0 || len(m.Command) > 0 || len(m.Hostname) > 0 || len(m.URL) > 0 || len(m.DatabaseOperation) > 0 || len(m.HTTPMethod) > 0 || len(m.Arguments) > 0
 }
 
 func (m Match) empty() bool {
@@ -192,7 +562,7 @@ func matches(m Match, action models.Action) bool {
 	if !anyMatch(m.Hostname, hostname(value(action.Arguments, "url", "endpoint", "host", "hostname"))) {
 		return false
 	}
-	if !anyMatch(m.DatabaseOperation, databaseOperation(action)) {
+	if !anyMatchAny(m.DatabaseOperation, databaseOperations(action)) {
 		return false
 	}
 	if !anyMatch(m.HTTPMethod, strings.ToUpper(value(action.Arguments, "method", "http_method"))) {
@@ -207,6 +577,12 @@ func matches(m Match, action models.Action) bool {
 	return true
 }
 
+// MatchAction exposes the same typed matcher used by policies and capabilities
+// to other enforcement controls such as cumulative action budgets.
+func MatchAction(match Match, action models.Action) bool {
+	return matches(match, action)
+}
+
 func value(arguments map[string]any, keys ...string) string {
 	for _, key := range keys {
 		if key == "" {
@@ -214,6 +590,13 @@ func value(arguments map[string]any, keys ...string) string {
 		}
 		if actual, ok := arguments[key]; ok {
 			return fmt.Sprint(actual)
+		}
+	}
+	for existingKey, actual := range arguments {
+		for _, key := range keys {
+			if strings.EqualFold(existingKey, key) {
+				return fmt.Sprint(actual)
+			}
 		}
 	}
 	return ""
@@ -229,15 +612,24 @@ func hostname(raw string) string {
 	return strings.Split(raw, "/")[0]
 }
 
-func databaseOperation(action models.Action) string {
+func databaseOperations(action models.Action) []string {
 	if explicit := value(action.Arguments, "operation", "database_operation"); explicit != "" {
-		return strings.ToUpper(explicit)
+		return []string{strings.ToUpper(explicit)}
 	}
 	query := strings.TrimSpace(value(action.Arguments, "query", "sql"))
-	if fields := strings.Fields(query); len(fields) > 0 {
-		return strings.ToUpper(fields[0])
+	return risk.DatabaseOperations(query)
+}
+
+func anyMatchAny(patterns StringList, actualValues []string) bool {
+	if len(patterns) == 0 {
+		return true
 	}
-	return ""
+	for _, actual := range actualValues {
+		if anyMatch(patterns, actual) {
+			return true
+		}
+	}
+	return false
 }
 
 func anyMatch(patterns StringList, actual string) bool {

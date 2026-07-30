@@ -1,4 +1,4 @@
-module github.com/latch-security/latch
+module github.com/princebabou/Latch
 
 go 1.24.0
 

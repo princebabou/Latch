@@ -1,7 +1,16 @@
 # Local security state and build caches
-.latch/
 .cache/
+.latch/
 bin/
+dist/
+
+coverage.out
+*.coverprofile
+*.log
+*.tmp
+
+latch
+latch.exe
 
 # Editor and OS files
 .DS_Store

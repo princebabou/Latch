@@ -5,6 +5,27 @@ enforcement:
   # Actions without a matching policy are escalated by deterministic risk score.
   approval_threshold: 40
   block_threshold: 90
+  # Break-glass unsafe overrides are disabled unless explicitly enabled here.
+  allow_unsafe_overrides: false
+
+# For production MCP launchers, set require_verified to true and register
+# per-agent capabilities as documented in the README.
+identity:
+  require_verified: false
+  enforce_capabilities: false
+
+# Cumulative per-agent budgets require verified identities. Add rules after
+# enabling identity.require_verified, or use latch.identity.example.yaml.
+budgets:
+  store_path: .latch/budgets.json
+  lock_timeout: 2s
+  rules: []
+
+approvals:
+  store_path: .latch/approvals.json
+  default_ttl: 15m
+  max_ttl: 24h
+  lock_timeout: 2s
 
 audit:
   path: .latch/audit.jsonl

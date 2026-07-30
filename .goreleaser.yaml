@@ -1,0 +1,71 @@
+version: 2
+
+project_name: latch
+
+builds:
+  - id: latch
+    main: ./cmd/latch
+    binary: latch
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - ids:
+      - latch
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    wrap_in_directory: true
+    files:
+      - LICENSE
+      - NOTICE
+      - README.md
+      - SECURITY.md
+      - configs/*.yaml
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+sboms:
+  - artifacts: archive
+
+nfpms:
+  - ids:
+      - latch
+    formats:
+      - deb
+      - rpm
+      - apk
+    vendor: Latch
+    homepage: https://github.com/princebabou/Latch
+    maintainer: Latch contributors
+    description: Security enforcement layer for AI agents
+    license: Apache-2.0
+    bindir: /usr/bin
+    contents:
+      - src: configs/latch.identity.example.yaml
+        dst: /etc/latch/latch.yaml
+        type: config|noreplace
+
+release:
+  prerelease: auto
+
+changelog:
+  use: github
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
