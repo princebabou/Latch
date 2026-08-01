@@ -17,6 +17,7 @@ It is deliberately a control plane, not a prompt-injection scanner. The intended
 - Time-bound, identity-attributed approval grants scoped to one exact normalized action and one policy version
 - Redacted JSONL audit trail with file permissions restricted to the current user
 - A versioned, fail-closed `latch.security/v1` Enforcement API for every SDK and adapter
+- Official fail-closed Go, Python, and TypeScript SDKs with guarded execution helpers
 - A bidirectional MCP stdio proxy that enforces every `tools/call` before forwarding
 - One-command policy scaffolding, deployment diagnostics, and native MCP configuration generation
 - Static cross-platform releases, Linux packages, a non-root multi-architecture container, SBOMs, checksums, and build attestations
@@ -73,6 +74,10 @@ Submit one intended action to `POST /v1/decisions` using the versioned
 must execute only an explicit `ALLOW` and fail closed on every error. See the
 [Enforcement API guide](docs/enforcement-api.md) and canonical
 [OpenAPI contract](api/openapi.yaml).
+
+Use the official [Go, Python, or TypeScript SDK](docs/sdks.md) to integrate the
+same contract in a few lines. Their guarded helpers invoke a tool only after a
+valid, request-correlated `ALLOW`.
 
 See [integration recipes](docs/integrations.md) and the
 [deployment guide](docs/deployment.md) for client destinations, CI gates,

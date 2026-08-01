@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "latch-sdk"
+version = "0.2.0a1"
+description = "Fail-closed Python client for the Latch Enforcement API"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "Apache-2.0"}
+authors = [{name = "Latch contributors"}]
+keywords = ["ai", "agents", "security", "policy", "mcp"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+  "Typing :: Typed",
+]
+
+[project.urls]
+Homepage = "https://github.com/princebabou/Latch"
+Repository = "https://github.com/princebabou/Latch"
+Documentation = "https://github.com/princebabou/Latch/blob/main/docs/sdks.md"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+latch_sdk = ["py.typed"]

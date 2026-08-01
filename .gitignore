@@ -8,6 +8,11 @@ coverage.out
 *.coverprofile
 *.log
 *.tmp
+__pycache__/
+*.py[cod]
+.pytest_cache/
+sdk/python/build/
+*.egg-info/
 
 /latch
 /latch.exe
