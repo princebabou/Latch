@@ -41,6 +41,8 @@ func run(args []string, in io.Reader, out, errOut io.Writer) int {
 		return runFile(args[1:], out, errOut)
 	case "proxy":
 		return proxy(args[1:], in, out, errOut)
+	case "serve":
+		return serve(args[1:], out, errOut)
 	case "policies":
 		return policies(args[1:], out, errOut)
 	case "identities":
@@ -75,6 +77,7 @@ Usage:
   latch integrations mcp --client <claude|cursor|vscode|generic> [options] -- server [args...]
   latch check --tool <name> [--arg key=value] [options]
   latch proxy [options] -- <mcp-server-command> [args...]
+  latch serve [--listen 127.0.0.1:7070] [--agent <trusted-id>] [options]
   latch run --input <actions.jsonl> [--config policy.yaml] [--agent <trusted-id>]
   latch policies list|validate [--config policy.yaml]
   latch identities list [--config policy.yaml] [--json]

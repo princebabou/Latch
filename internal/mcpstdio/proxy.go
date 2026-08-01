@@ -19,7 +19,7 @@ import (
 	"github.com/princebabou/Latch/internal/approval"
 	"github.com/princebabou/Latch/internal/audit"
 	"github.com/princebabou/Latch/internal/budget"
-	"github.com/princebabou/Latch/internal/enforce"
+	"github.com/princebabou/Latch/internal/decision"
 	"github.com/princebabou/Latch/internal/normalize"
 	"github.com/princebabou/Latch/internal/policy"
 	"github.com/princebabou/Latch/pkg/models"
@@ -49,6 +49,7 @@ type Options struct {
 	AuditLogger     audit.Logger
 	ApprovalStore   *approval.Store
 	BudgetStore     *budget.Store
+	DecisionService *decision.Service
 }
 
 // Run starts the upstream MCP server, transparently forwards its entire MCP
@@ -166,22 +167,12 @@ func (options *Options) applyDefaults() error {
 	if options.ErrorOutput == nil {
 		options.ErrorOutput = os.Stderr
 	}
-	if options.AuditLogger == nil {
-		options.AuditLogger = audit.JSONLLogger{Path: options.Policy.Audit.Path}
-	}
-	if options.ApprovalStore == nil {
-		store, err := approval.NewStore(options.Policy)
+	if options.DecisionService == nil {
+		service, err := decision.New(options.Policy, options.AuditLogger, options.ApprovalStore, options.BudgetStore)
 		if err != nil {
-			return fmt.Errorf("configure approval store: %w", err)
+			return err
 		}
-		options.ApprovalStore = &store
-	}
-	if options.BudgetStore == nil {
-		store, err := budget.NewStore(options.Policy)
-		if err != nil {
-			return fmt.Errorf("configure action budgets: %w", err)
-		}
-		options.BudgetStore = &store
+		options.DecisionService = service
 	}
 	return nil
 }
@@ -279,56 +270,18 @@ func inspectClientMessage(options Options, session *sessionIdentity, message []b
 		return false, writeProtocolError(protocolOut, id, -32602, "Latch: invalid tools/call parameters")
 	}
 
-	action, identity = enforce.CanonicalizeIdentity(options.Policy, action, identity)
-	assessment := enforce.EvaluateWithIdentity(options.Policy, action, identity)
-	approvalStatus := ""
-	if assessment.Decision != models.DecisionBlock {
-		statuses, budgetErr := options.BudgetStore.Check(action)
-		assessment = budget.Apply(assessment, statuses, budgetErr)
-		if budgetErr != nil {
-			fmt.Fprintln(diagnosticOut, "Latch: action budget store unavailable; action blocked")
-		}
-	}
-	if assessment.Decision == models.DecisionRequireApproval {
-		grant, allowed, approvalErr := options.ApprovalStore.IsAllowed(action)
-		if approvalErr != nil {
-			assessment.Decision = models.DecisionBlock
-			assessment.DecisionSource = "approval_store_failure"
-			assessment.Reasons = append(assessment.Reasons, "Approval state could not be read safely")
-			approvalStatus = "store_error"
-			fmt.Fprintln(diagnosticOut, "Latch: approval store unavailable; action blocked")
-		} else if allowed {
-			assessment.Decision = models.DecisionAllow
-			assessment.DecisionSource = "approval_cache"
-			assessment.Reasons = append(assessment.Reasons, fmt.Sprintf("Approved by %s until %s", grant.Approver, grant.ExpiresAt.Format(time.RFC3339)))
-			approvalStatus = "grant:" + grant.ID
-		} else {
-			approvalStatus = "pending"
-		}
-	}
-	if assessment.Decision == models.DecisionAllow {
-		statuses, budgetErr := options.BudgetStore.Reserve(action)
-		assessment = budget.Apply(assessment, statuses, budgetErr)
-		if budgetErr != nil {
-			fmt.Fprintln(diagnosticOut, "Latch: action budget reservation failed; action blocked")
-		}
-	}
-
-	event := audit.NewEvent(action, assessment, approvalStatus)
-	if err := options.AuditLogger.Write(event); err != nil {
-		assessment.Decision = models.DecisionBlock
-		assessment.DecisionSource = "audit_failure"
-		assessment.Reasons = append(assessment.Reasons, "Required audit logging failed")
-		fmt.Fprintln(diagnosticOut, "Latch: audit write failed; action blocked")
-		return false, writeToolDecision(protocolOut, id, assessment, true)
+	result := options.DecisionService.Decide(action, identity)
+	assessment := result.Assessment
+	if diagnostic := decision.Diagnostic(result); diagnostic != "" {
+		fmt.Fprintln(diagnosticOut, diagnostic)
 	}
 	if options.Policy.Audit.Terminal {
-		fmt.Fprintln(diagnosticOut, audit.Terminal(event))
+		fmt.Fprintln(diagnosticOut, audit.Terminal(result.Event))
 	}
 	if assessment.Decision == models.DecisionAllow {
 		return true, nil
 	}
-	return false, writeToolDecision(protocolOut, id, assessment, false)
+	return false, writeToolDecision(protocolOut, id, assessment, assessment.DecisionSource == "audit_failure")
 }
 
 type toolCall struct {

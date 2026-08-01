@@ -1,0 +1,204 @@
+openapi: 3.1.0
+info:
+  title: Latch Enforcement API
+  version: 1.0.0
+  description: Versioned, fail-closed pre-execution decisions for AI agent actions.
+servers:
+  - url: http://127.0.0.1:7070
+paths:
+  /v1/decisions:
+    post:
+      operationId: createDecision
+      summary: Evaluate one intended action immediately before execution
+      security:
+        - bearerAuth: []
+        - {}
+      requestBody:
+        required: true
+        content:
+          application/vnd.latch.decision.v1+json:
+            schema:
+              $ref: '#/components/schemas/DecisionRequest'
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DecisionRequest'
+      responses:
+        '200':
+          description: A valid ALLOW, BLOCK, or REQUIRE_APPROVAL verdict.
+          content:
+            application/vnd.latch.decision.v1+json:
+              schema:
+                $ref: '#/components/schemas/DecisionResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '413':
+          $ref: '#/components/responses/Error'
+        '415':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
+  /healthz:
+    get:
+      operationId: health
+      responses:
+        '200':
+          description: Process health.
+  /readyz:
+    get:
+      operationId: readiness
+      responses:
+        '200':
+          description: Decision service readiness.
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  responses:
+    Error:
+      description: The request did not produce an enforcement verdict.
+      content:
+        application/vnd.latch.decision.v1+json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    DecisionRequest:
+      type: object
+      additionalProperties: false
+      required: [api_version, request_id, action]
+      properties:
+        api_version:
+          const: latch.security/v1
+        request_id:
+          type: string
+          pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$'
+        action:
+          $ref: '#/components/schemas/Action'
+    Action:
+      type: object
+      additionalProperties: false
+      required: [tool]
+      properties:
+        agent_id:
+          type: string
+          maxLength: 256
+        tool:
+          type: string
+          minLength: 1
+          maxLength: 256
+        operation:
+          type: string
+          maxLength: 128
+        resource:
+          type: string
+          maxLength: 16384
+        arguments:
+          type: object
+          additionalProperties: true
+        metadata:
+          type: object
+          additionalProperties: true
+    DecisionResponse:
+      type: object
+      additionalProperties: false
+      required: [api_version, request_id, decision, risk, identity, policy]
+      properties:
+        api_version:
+          const: latch.security/v1
+        request_id:
+          type: string
+        decision:
+          type: string
+          enum: [ALLOW, BLOCK, REQUIRE_APPROVAL]
+        fail_closed:
+          type: boolean
+        risk:
+          $ref: '#/components/schemas/Risk'
+        identity:
+          $ref: '#/components/schemas/Identity'
+        policy:
+          $ref: '#/components/schemas/PolicyResult'
+        budgets:
+          type: array
+          items:
+            $ref: '#/components/schemas/BudgetStatus'
+    Risk:
+      type: object
+      additionalProperties: false
+      required: [score, level]
+      properties:
+        score:
+          type: integer
+          minimum: 0
+          maximum: 100
+        level:
+          type: string
+        signals:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [name, score, description]
+            properties:
+              name: {type: string}
+              score: {type: integer}
+              description: {type: string}
+    Identity:
+      type: object
+      additionalProperties: false
+      required: [verified]
+      properties:
+        verified: {type: boolean}
+        source: {type: string}
+        canonical_agent_id: {type: string}
+        matched_capabilities:
+          type: array
+          items: {type: string}
+    PolicyResult:
+      type: object
+      additionalProperties: false
+      required: [decision_source, hard_deny]
+      properties:
+        decision_source: {type: string}
+        hard_deny: {type: boolean}
+        unsafe_override: {type: boolean}
+        triggered_rules:
+          type: array
+          items: {type: string}
+        reasons:
+          type: array
+          items: {type: string}
+    BudgetStatus:
+      type: object
+      additionalProperties: false
+      required: [rule_id, limit, used, remaining, window, exceeded]
+      properties:
+        rule_id: {type: string}
+        description: {type: string}
+        limit: {type: integer}
+        used: {type: integer}
+        remaining: {type: integer}
+        window: {type: string}
+        retry_after: {type: string}
+        exceeded: {type: boolean}
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [api_version, error]
+      properties:
+        api_version:
+          const: latch.security/v1
+        request_id: {type: string}
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message]
+          properties:
+            code: {type: string}
+            message: {type: string}

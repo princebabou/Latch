@@ -16,10 +16,12 @@ It is deliberately a control plane, not a prompt-injection scanner. The intended
 - Durable per-agent rolling action budgets that stop cumulative and runaway behavior
 - Time-bound, identity-attributed approval grants scoped to one exact normalized action and one policy version
 - Redacted JSONL audit trail with file permissions restricted to the current user
+- A versioned, fail-closed `latch.security/v1` Enforcement API for every SDK and adapter
 - A bidirectional MCP stdio proxy that enforces every `tools/call` before forwarding
 - One-command policy scaffolding, deployment diagnostics, and native MCP configuration generation
 - Static cross-platform releases, Linux packages, a non-root multi-architecture container, SBOMs, checksums, and build attestations
 - `latch init`, `latch doctor`, `latch integrations`, `latch check`, `latch proxy`, `latch run`, `latch policies`, `latch identities`, `latch budgets`, `latch approvals`, and `latch logs` commands
+- `latch serve` for the stable HTTP decision contract, health checks, replay protection, and operator-bound identity
 
 The `check` and `run` commands never execute evaluated actions. The `proxy` command launches an MCP server and permits only actions that pass Latch enforcement.
 
@@ -58,6 +60,19 @@ latch check --tool shell.exec --arg "command=npm test" \
   --interactive --approver local:alice --approval-ttl 30m
 latch run --input examples/actions.jsonl
 ```
+
+Start the stable Enforcement API used by integrations:
+
+```sh
+export LATCH_API_TOKEN="$(openssl rand -hex 32)"
+latch serve --config latch.yaml --agent desktop-agent
+```
+
+Submit one intended action to `POST /v1/decisions` using the versioned
+`latch.security/v1` contract. A valid verdict always returns HTTP `200`; callers
+must execute only an explicit `ALLOW` and fail closed on every error. See the
+[Enforcement API guide](docs/enforcement-api.md) and canonical
+[OpenAPI contract](api/openapi.yaml).
 
 See [integration recipes](docs/integrations.md) and the
 [deployment guide](docs/deployment.md) for client destinations, CI gates,
@@ -334,7 +349,7 @@ container at `ghcr.io/princebabou/latch`.
 
 ## Current boundary
 
-This milestone secures local MCP stdio servers, operator-bound local agent identities, capability ceilings, durable cumulative action budgets, local approval lifecycles, and structured shell/HTTP/SQL inspection. Streamable HTTP transport proxying, cryptographic remote agent identity, and centrally authenticated remote approvers remain separate follow-up priorities. Transport and parser code remain isolated from the enforcement decision contract so additional adapters and detectors do not change the `ALLOW` / `BLOCK` / `REQUIRE_APPROVAL` interface.
+This milestone secures local MCP stdio servers, operator-bound agent identities, capability ceilings, durable cumulative action budgets, local approval lifecycles, structured shell/HTTP/SQL inspection, and a stable versioned Enforcement API. Integration SDKs, Streamable HTTP and framework adapters, the shared conformance suite, a local policy playground, observability, and complete reference deployments are the ordered v0.2 follow-up priorities. Transport and parser code remain isolated from the `ALLOW` / `BLOCK` / `REQUIRE_APPROVAL` contract.
 
 Run the suite with:
 
