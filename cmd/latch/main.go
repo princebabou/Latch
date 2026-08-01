@@ -41,6 +41,8 @@ func run(args []string, in io.Reader, out, errOut io.Writer) int {
 		return runFile(args[1:], out, errOut)
 	case "proxy":
 		return proxy(args[1:], in, out, errOut)
+	case "proxy-http":
+		return proxyHTTP(args[1:], out, errOut)
 	case "serve":
 		return serve(args[1:], out, errOut)
 	case "policies":
@@ -75,8 +77,10 @@ Usage:
   latch init [--profile balanced|strict|developer] [--output latch.yaml]
   latch doctor [--config policy.yaml] [--agent <trusted-id>] [-- server [args...]]
   latch integrations mcp --client <claude|cursor|vscode|generic> [options] -- server [args...]
+  latch integrations mcp-http --client <claude-code|cursor|vscode|generic> [options]
   latch check --tool <name> [--arg key=value] [options]
   latch proxy [options] -- <mcp-server-command> [args...]
+  latch proxy-http --upstream <https://server/mcp> [options]
   latch serve [--listen 127.0.0.1:7070] [--agent <trusted-id>] [options]
   latch run --input <actions.jsonl> [--config policy.yaml] [--agent <trusted-id>]
   latch policies list|validate [--config policy.yaml]
@@ -94,10 +98,11 @@ Examples:
   latch check --tool filesystem.read --arg path=~/.ssh/id_rsa
   latch check --tool shell.exec --arg "command=npm test" --interactive
   latch proxy --agent claude-desktop -- ./my-mcp-server
+  latch proxy-http --upstream https://tools.example/mcp --agent remote-agent
   latch run --input examples/actions.jsonl
 
-The check and run commands only evaluate requests. The proxy command launches
-the named MCP server and forwards only tool calls that Latch allows.
+The check and run commands only evaluate requests. The proxy commands forward
+only MCP tool calls that Latch allows.
 `)
 }
 

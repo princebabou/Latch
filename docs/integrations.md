@@ -1,10 +1,14 @@
 # Integrating Latch
 
-Latch has two stable integration surfaces:
+Latch has four stable integration surfaces:
 
 1. `latch proxy` is a transparent security boundary for local MCP stdio
    servers.
-2. `latch check` is a protocol-neutral policy gate for scripts, CI jobs,
+2. `latch proxy-http` protects MCP Streamable HTTP servers while preserving
+   JSON, SSE, and session behavior.
+3. The versioned Enforcement API and official SDKs embed Latch into existing
+   Go, Python, and TypeScript tool runners.
+4. `latch check` is a protocol-neutral policy gate for scripts, CI jobs,
    orchestrators, and tool wrappers.
 
 ## Three-command MCP setup
@@ -49,6 +53,43 @@ Common destinations:
 Run `latch doctor` again after moving the policy or server. It checks the
 policy, trusted identity, capability and budget readiness, state locations,
 working directory, and server executable without starting the server.
+
+## Streamable HTTP setup
+
+Start an authenticated local boundary in front of an existing MCP endpoint:
+
+```sh
+export LATCH_MCP_TOKEN="$(openssl rand -hex 32)"
+export LATCH_MCP_UPSTREAM_TOKEN="upstream-service-token"
+
+latch proxy-http --config latch.yaml --agent desktop-agent \
+  --upstream https://tools.example/mcp
+```
+
+Generate client-native configuration:
+
+```sh
+latch integrations mcp-http --client vscode --name protected-tools \
+  --url http://127.0.0.1:7071/mcp --output .vscode/mcp.json
+
+latch integrations mcp-http --client cursor --name protected-tools \
+  --url http://127.0.0.1:7071/mcp --output .cursor/mcp.json
+```
+
+The VS Code generator uses a password input and never writes the token. Claude
+Code and generic output reference `${LATCH_MCP_TOKEN}`. Cursor output uses its
+`${env:LATCH_MCP_TOKEN}` form; keep the generated entry in user configuration
+if the installed Cursor version does not interpolate remote header variables.
+Use `--no-auth` only for an authless loopback proxy without a trusted `--agent`
+binding.
+
+The client-facing and upstream bearer tokens are separate trust boundaries.
+When `LATCH_MCP_TOKEN` is enabled, the incoming `Authorization` header is
+consumed by Latch and is not sent upstream. Set
+`LATCH_MCP_UPSTREAM_TOKEN` when the real server also requires a bearer token.
+
+See [MCP Streamable HTTP](mcp-streamable-http.md) for the complete transport and
+deployment contract.
 
 ## Trust binding
 
@@ -122,6 +163,9 @@ overrides are also available:
 |---|---|
 | `LATCH_CONFIG` | Default policy path |
 | `LATCH_AGENT` | Default trusted launcher identity |
+| `LATCH_MCP_LISTEN` | Streamable HTTP proxy listen address |
+| `LATCH_MCP_TOKEN` | Client-facing Streamable HTTP bearer token |
+| `LATCH_MCP_UPSTREAM_TOKEN` | Separate upstream MCP bearer token |
 | `LATCH_AUDIT_PATH` | Audit JSONL location |
 | `LATCH_APPROVAL_STORE` | Durable approval store |
 | `LATCH_BUDGET_STORE` | Durable budget store |

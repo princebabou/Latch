@@ -32,3 +32,25 @@ func TestValidateServeSecurity(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestValidateUpstreamSecurity(t *testing.T) {
+	for _, endpoint := range []string{
+		"http://127.0.0.1:8080/mcp",
+		"http://[::1]:8080/mcp",
+		"http://localhost:8080/mcp",
+		"https://mcp.example/mcp",
+	} {
+		if err := validateUpstreamSecurity(endpoint, false); err != nil {
+			t.Errorf("%q should be accepted: %v", endpoint, err)
+		}
+	}
+	if err := validateUpstreamSecurity("http://mcp.internal:8080/mcp", false); err == nil {
+		t.Fatal("cleartext non-loopback upstream was accepted implicitly")
+	}
+	if err := validateUpstreamSecurity("http://mcp.internal:8080/mcp", true); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateUpstreamSecurity("not-a-url", true); err == nil {
+		t.Fatal("invalid upstream URL was accepted")
+	}
+}

@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -20,14 +21,22 @@ type mcpLaunchConfig struct {
 	Env     map[string]string `json:"env,omitempty"`
 }
 
+type mcpRemoteConfig struct {
+	Type    string            `json:"type,omitempty"`
+	URL     string            `json:"url"`
+	Headers map[string]string `json:"headers,omitempty"`
+}
+
 func integrations(args []string, out, errOut io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "Usage: latch integrations mcp --client <claude|cursor|vscode|generic> [options] -- server [args...]")
+		fmt.Fprintln(errOut, "Usage: latch integrations mcp|mcp-http [options]")
 		return 64
 	}
 	switch args[0] {
 	case "mcp":
 		return mcpIntegration(args[1:], out, errOut)
+	case "mcp-http":
+		return mcpHTTPIntegration(args[1:], out, errOut)
 	default:
 		fmt.Fprintf(errOut, "Unknown integration %q\n", args[0])
 		return 64
@@ -127,22 +136,121 @@ func mcpIntegration(args []string, out, errOut io.Writer) int {
 	default:
 		document = launch
 	}
+	return writeIntegrationDocument(document, clientName, *outputPath, *force, out, errOut)
+}
+
+func mcpHTTPIntegration(args []string, out, errOut io.Writer) int {
+	fs := flag.NewFlagSet("integrations mcp-http", flag.ContinueOnError)
+	fs.SetOutput(errOut)
+	client := fs.String("client", "generic", "target client: claude-code, cursor, vscode, or generic")
+	name := fs.String("name", "latch-protected", "MCP server registration name")
+	endpoint := fs.String("url", "http://127.0.0.1:7071/mcp", "Latch MCP Streamable HTTP endpoint")
+	tokenEnvironment := fs.String("token-env", "LATCH_MCP_TOKEN", "client environment variable containing the proxy token")
+	noAuth := fs.Bool("no-auth", false, "generate an authless local configuration")
+	outputPath := fs.String("output", "-", "destination JSON path, or - for stdout")
+	force := fs.Bool("force", false, "replace an existing destination")
+	if err := fs.Parse(args); err != nil {
+		return 64
+	}
+	if fs.NArg() != 0 {
+		fmt.Fprintln(errOut, "integrations mcp-http does not accept positional arguments")
+		return 64
+	}
+	clientName := strings.ToLower(strings.TrimSpace(*client))
+	switch clientName {
+	case "claude-code", "cursor", "vscode", "generic":
+	default:
+		fmt.Fprintln(errOut, "--client must be claude-code, cursor, vscode, or generic")
+		return 64
+	}
+	if strings.TrimSpace(*name) == "" {
+		fmt.Fprintln(errOut, "--name is required")
+		return 64
+	}
+	if !validMCPURL(*endpoint) {
+		fmt.Fprintln(errOut, "--url must be an absolute HTTP or HTTPS URL without credentials, query, or fragment")
+		return 64
+	}
+	tokenName := strings.TrimSpace(*tokenEnvironment)
+	if !*noAuth && !validEnvironmentName(tokenName) {
+		fmt.Fprintln(errOut, "--token-env must be a valid environment variable name")
+		return 64
+	}
+	remote := mcpRemoteConfig{URL: *endpoint}
+	var inputs []map[string]any
+	if !*noAuth {
+		switch clientName {
+		case "vscode":
+			remote.Headers = map[string]string{"Authorization": "Bearer ${input:latch-mcp-token}"}
+			inputs = []map[string]any{{
+				"type": "promptString", "id": "latch-mcp-token",
+				"description": "Latch MCP bearer token", "password": true,
+			}}
+		case "cursor":
+			remote.Headers = map[string]string{"Authorization": "Bearer ${env:" + tokenName + "}"}
+		default:
+			remote.Headers = map[string]string{"Authorization": "Bearer ${" + tokenName + "}"}
+		}
+	}
+
+	var document any
+	switch clientName {
+	case "vscode":
+		remote.Type = "http"
+		vscodeDocument := map[string]any{"servers": map[string]any{*name: remote}}
+		if len(inputs) > 0 {
+			vscodeDocument["inputs"] = inputs
+		}
+		document = vscodeDocument
+	case "cursor":
+		// Cursor selects Streamable HTTP from the url field. Omitting type also
+		// avoids versions that reject the otherwise equivalent streamable-http alias.
+		document = map[string]any{"mcpServers": map[string]any{*name: remote}}
+	case "claude-code":
+		remote.Type = "http"
+		document = map[string]any{"mcpServers": map[string]any{*name: remote}}
+	default:
+		remote.Type = "http"
+		document = remote
+	}
+	return writeIntegrationDocument(document, clientName, *outputPath, *force, out, errOut)
+}
+
+func validMCPURL(raw string) bool {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	return err == nil && (parsed.Scheme == "http" || parsed.Scheme == "https") && parsed.Host != "" && parsed.User == nil && parsed.RawQuery == "" && parsed.Fragment == ""
+}
+
+func validEnvironmentName(value string) bool {
+	if value == "" {
+		return false
+	}
+	for index, character := range value {
+		if (character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z') || character == '_' || (index > 0 && character >= '0' && character <= '9') {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func writeIntegrationDocument(document any, clientName, outputPath string, force bool, out, errOut io.Writer) int {
 	encoded, err := json.MarshalIndent(document, "", "  ")
 	if err != nil {
 		fmt.Fprintf(errOut, "encode integration: %v\n", err)
 		return 1
 	}
 	encoded = append(encoded, '\n')
-	if *outputPath == "-" {
+	if outputPath == "-" {
 		_, _ = out.Write(encoded)
 		return 0
 	}
-	absoluteOutput, err := filepath.Abs(*outputPath)
+	absoluteOutput, err := filepath.Abs(outputPath)
 	if err != nil {
 		fmt.Fprintf(errOut, "resolve output path: %v\n", err)
 		return 1
 	}
-	if err := writePrivateFile(absoluteOutput, encoded, *force); err != nil {
+	if err := writePrivateFile(absoluteOutput, encoded, force); err != nil {
 		fmt.Fprintf(errOut, "write integration: %v\n", err)
 		return 1
 	}

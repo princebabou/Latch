@@ -101,9 +101,25 @@ CMD ["proxy", "--agent", "desktop-agent", "--", "/usr/local/bin/my-mcp-server"]
 ```
 
 Do not deploy a stdio proxy as an unrelated network sidecar: it cannot
-intercept another container's process streams. A remote HTTP adapter should
-use a transport-specific identity and authentication design rather than
-pretending local stdio identity is remote authentication.
+intercept another container's process streams. Use `proxy-http` as the network
+boundary for an MCP Streamable HTTP server:
+
+```sh
+docker run --rm \
+  -p 7071:7071 \
+  -e LATCH_AGENT=remote-agent \
+  -e LATCH_MCP_TOKEN \
+  -e LATCH_MCP_UPSTREAM_TOKEN \
+  -v latch-state:/var/lib/latch \
+  -v "$PWD/latch.yaml:/etc/latch/latch.yaml:ro" \
+  ghcr.io/princebabou/latch:latest \
+  proxy-http --listen 0.0.0.0:7071 --behind-tls-proxy \
+  --upstream http://mcp-server:8080/mcp --allow-http-upstream
+```
+
+Terminate TLS at a trusted reverse proxy before exposing this listener. The
+explicit `--allow-http-upstream` is required for a cleartext container-network
+hop; prefer upstream TLS when available.
 
 ## Service hardening
 
@@ -114,6 +130,8 @@ pretending local stdio identity is remote authentication.
 - Give every launcher a separate verified agent ID and capability ceiling.
 - Persist approval and budget state across restarts.
 - Forward `stderr` to operator logs; reserve `stdout` for MCP protocol data.
+- Keep client-facing and upstream MCP tokens separate; never forward the Latch
+  boundary credential to the tool server.
 - Back up audit logs according to the organization's retention requirements,
   but do not make enforcement depend on a remote log collector.
 - Run `latch doctor` in deployment validation before starting the launcher.

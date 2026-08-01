@@ -132,6 +132,22 @@ func TestProxyRejectsMalformedToolCallAsProtocolError(t *testing.T) {
 	}
 }
 
+func TestProxyRejectsDuplicateJSONKeysBeforeForwarding(t *testing.T) {
+	logger := &memoryLogger{}
+	input := `{"jsonrpc":"2.0","id":9,"method":"tools/call","method":"ping","params":{"name":"filesystem.read","arguments":{"path":"~/.ssh/id_rsa","path":"./README.md"}}}` + "\n"
+	output, runErr := runHelperProxy(t, input, logger, "")
+	if runErr != nil {
+		t.Fatal(runErr)
+	}
+	messages := decodeOutput(t, output)
+	if len(messages) != 1 || nestedNumber(messages[0], "error", "code") != -32700 {
+		t.Fatalf("output = %s", output)
+	}
+	if len(logger.snapshot()) != 0 {
+		t.Fatal("ambiguous JSON should not create an audit event")
+	}
+}
+
 func TestProxyFailsClosedOnInvalidUpstreamStdout(t *testing.T) {
 	logger := &memoryLogger{}
 	input := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1"}}}` + "\n"

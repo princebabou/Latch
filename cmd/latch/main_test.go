@@ -211,6 +211,42 @@ func TestMCPIntegrationGeneratesClientNativeConfiguration(t *testing.T) {
 	}
 }
 
+func TestMCPHTTPIntegrationGeneratesSecretSafeClientConfiguration(t *testing.T) {
+	for _, client := range []string{"claude-code", "cursor", "vscode", "generic"} {
+		t.Run(client, func(t *testing.T) {
+			var out, errOut bytes.Buffer
+			code := run([]string{
+				"integrations", "mcp-http", "--client", client,
+				"--name", "protected", "--url", "https://latch.example/mcp",
+				"--token-env", "MY_LATCH_TOKEN",
+			}, strings.NewReader(""), &out, &errOut)
+			if code != 0 {
+				t.Fatalf("exit code = %d, stderr = %q", code, errOut.String())
+			}
+			if !json.Valid(out.Bytes()) || !strings.Contains(out.String(), "https://latch.example/mcp") || !strings.Contains(out.String(), "Authorization") {
+				t.Fatalf("configuration = %s", out.String())
+			}
+			if strings.Contains(out.String(), "actual-secret") {
+				t.Fatalf("configuration embedded a token: %s", out.String())
+			}
+			switch client {
+			case "vscode":
+				if !strings.Contains(out.String(), `"password": true`) || !strings.Contains(out.String(), "${input:latch-mcp-token}") {
+					t.Fatalf("VS Code configuration = %s", out.String())
+				}
+			case "cursor":
+				if strings.Contains(out.String(), `"type"`) || !strings.Contains(out.String(), "${env:MY_LATCH_TOKEN}") {
+					t.Fatalf("Cursor configuration = %s", out.String())
+				}
+			default:
+				if !strings.Contains(out.String(), "${MY_LATCH_TOKEN}") {
+					t.Fatalf("configuration = %s", out.String())
+				}
+			}
+		})
+	}
+}
+
 func TestVersionJSONContainsBuildMetadata(t *testing.T) {
 	oldVersion, oldCommit, oldDate, oldBuiltBy := version, commit, date, builtBy
 	version, commit, date, builtBy = "v1.2.3", "abc123", "2026-07-30T00:00:00Z", "test"

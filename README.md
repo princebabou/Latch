@@ -18,13 +18,13 @@ It is deliberately a control plane, not a prompt-injection scanner. The intended
 - Redacted JSONL audit trail with file permissions restricted to the current user
 - A versioned, fail-closed `latch.security/v1` Enforcement API for every SDK and adapter
 - Official fail-closed Go, Python, and TypeScript SDKs with guarded execution helpers
-- A bidirectional MCP stdio proxy that enforces every `tools/call` before forwarding
+- Bidirectional MCP stdio and Streamable HTTP proxies that enforce every `tools/call` before forwarding
 - One-command policy scaffolding, deployment diagnostics, and native MCP configuration generation
 - Static cross-platform releases, Linux packages, a non-root multi-architecture container, SBOMs, checksums, and build attestations
-- `latch init`, `latch doctor`, `latch integrations`, `latch check`, `latch proxy`, `latch run`, `latch policies`, `latch identities`, `latch budgets`, `latch approvals`, and `latch logs` commands
+- `latch init`, `latch doctor`, `latch integrations`, `latch check`, `latch proxy`, `latch proxy-http`, `latch run`, `latch policies`, `latch identities`, `latch budgets`, `latch approvals`, and `latch logs` commands
 - `latch serve` for the stable HTTP decision contract, health checks, replay protection, and operator-bound identity
 
-The `check` and `run` commands never execute evaluated actions. The `proxy` command launches an MCP server and permits only actions that pass Latch enforcement.
+The `check` and `run` commands never execute evaluated actions. The MCP proxy commands permit only actions that pass Latch enforcement.
 
 ## Quick start
 
@@ -119,6 +119,38 @@ Example MCP client configuration:
 The proxy follows MCP stdio framing: UTF-8 JSON-RPC objects, one message per line, with protocol data exclusively on `stdout` and diagnostics on `stderr`. Invalid client calls receive standard JSON-RPC errors. Blocked and approval-required actions receive MCP tool results with `isError: true`; they are never sent upstream. Invalid upstream protocol output, oversized messages, approval-store failures, and audit failures fail closed.
 
 The default message limit is 4 MiB and can be changed with `--max-message-bytes`. Use `--cwd` when the child server needs a specific working directory. The proxy currently targets the stable MCP `2025-11-25` stdio contract while remaining transparent to protocol methods it does not inspect.
+
+## MCP Streamable HTTP proxy
+
+Place Latch in front of an existing remote or local Streamable HTTP server:
+
+```sh
+export LATCH_MCP_TOKEN="$(openssl rand -hex 32)"
+export LATCH_MCP_UPSTREAM_TOKEN="upstream-service-token"
+
+latch proxy-http \
+  --config latch.yaml \
+  --agent desktop-agent \
+  --upstream https://tools.example/mcp
+```
+
+Clients connect to `http://127.0.0.1:7071/mcp`. Generate a native, secret-safe
+configuration instead of hand-writing it:
+
+```sh
+latch integrations mcp-http --client vscode --name protected-tools \
+  --url http://127.0.0.1:7071/mcp --output .vscode/mcp.json
+```
+
+The proxy preserves MCP `POST`, `GET`, and `DELETE`, JSON responses, SSE
+streams, protocol-version headers, resumability headers, and upstream session
+IDs. It rejects disallowed origins, redirects, ambiguous duplicate-key JSON,
+oversized messages, invalid sessions, and unavailable audit or policy state.
+The client-facing bearer token is never forwarded upstream; configure upstream
+credentials separately with `LATCH_MCP_UPSTREAM_TOKEN`.
+
+See the [Streamable HTTP adapter guide](docs/mcp-streamable-http.md) for TLS,
+authentication, client setup, Docker networking, and operational limits.
 
 ## How a decision is made
 
@@ -354,7 +386,12 @@ container at `ghcr.io/princebabou/latch`.
 
 ## Current boundary
 
-This milestone secures local MCP stdio servers, operator-bound agent identities, capability ceilings, durable cumulative action budgets, local approval lifecycles, structured shell/HTTP/SQL inspection, and a stable versioned Enforcement API. Integration SDKs, Streamable HTTP and framework adapters, the shared conformance suite, a local policy playground, observability, and complete reference deployments are the ordered v0.2 follow-up priorities. Transport and parser code remain isolated from the `ALLOW` / `BLOCK` / `REQUIRE_APPROVAL` contract.
+Latch now secures MCP stdio and Streamable HTTP servers through one shared
+enforcement inspector, alongside the stable Enforcement API and official Go,
+Python, and TypeScript SDKs. Generic HTTP, OpenAI-compatible tool calling,
+LangChain/LangGraph, shell, and CI/CD adapters remain the next v0.2 adapter
+milestones, followed by the conformance suite, policy playground,
+observability, and reference deployments.
 
 Run the suite with:
 
