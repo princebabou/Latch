@@ -19,12 +19,13 @@ It is deliberately a control plane, not a prompt-injection scanner. The intended
 - A versioned, fail-closed `latch.security/v1` Enforcement API for every SDK and adapter
 - Official fail-closed Go, Python, and TypeScript SDKs with guarded execution helpers
 - Bidirectional MCP stdio and Streamable HTTP proxies that enforce every `tools/call` before forwarding
+- A generic HTTP/API reverse gateway with semantic body inspection, separated credentials, and allow-only forwarding
 - One-command policy scaffolding, deployment diagnostics, and native MCP configuration generation
 - Static cross-platform releases, Linux packages, a non-root multi-architecture container, SBOMs, checksums, and build attestations
-- `latch init`, `latch doctor`, `latch integrations`, `latch check`, `latch proxy`, `latch proxy-http`, `latch run`, `latch policies`, `latch identities`, `latch budgets`, `latch approvals`, and `latch logs` commands
+- `latch init`, `latch doctor`, `latch integrations`, `latch check`, `latch proxy`, `latch proxy-http`, `latch proxy-api`, `latch run`, `latch policies`, `latch identities`, `latch budgets`, `latch approvals`, and `latch logs` commands
 - `latch serve` for the stable HTTP decision contract, health checks, replay protection, and operator-bound identity
 
-The `check` and `run` commands never execute evaluated actions. The MCP proxy commands permit only actions that pass Latch enforcement.
+The `check` and `run` commands never execute evaluated actions. Every proxy permits only actions that pass Latch enforcement.
 
 ## Quick start
 
@@ -151,6 +152,30 @@ credentials separately with `LATCH_MCP_UPSTREAM_TOKEN`.
 
 See the [Streamable HTTP adapter guide](docs/mcp-streamable-http.md) for TLS,
 authentication, client setup, Docker networking, and operational limits.
+
+## Generic HTTP/API gateway
+
+Protect an existing HTTP API without modifying it:
+
+```sh
+export LATCH_HTTP_TOKEN="$(openssl rand -hex 32)"
+export SERVICE_AUTHORIZATION="Bearer upstream-service-token"
+
+latch proxy-api --config latch.yaml --agent api-agent \
+  --upstream https://api.example/v1 \
+  --upstream-header-env Authorization=SERVICE_AUTHORIZATION
+```
+
+Point the calling tool's base URL at `http://127.0.0.1:7072` and add the
+`X-Latch-Token` header. Latch evaluates the exact method, destination, headers,
+query, and semantically inspected body as `http.request`. Gateway and upstream
+credentials remain separate; agent-supplied credentials are stripped unless
+the operator explicitly enables their risk-visible forwarding.
+
+Only `ALLOW` reaches the fixed upstream. Blocks, pending approvals, exhausted
+budgets, ambiguous JSON, opaque bodies, redirects, and unavailable audit or
+durable state fail closed. See the [HTTP/API gateway guide](docs/http-api-gateway.md)
+for client configuration, policy examples, status codes, and hardening.
 
 ## How a decision is made
 
@@ -386,12 +411,11 @@ container at `ghcr.io/princebabou/latch`.
 
 ## Current boundary
 
-Latch now secures MCP stdio and Streamable HTTP servers through one shared
-enforcement inspector, alongside the stable Enforcement API and official Go,
-Python, and TypeScript SDKs. Generic HTTP, OpenAI-compatible tool calling,
-LangChain/LangGraph, shell, and CI/CD adapters remain the next v0.2 adapter
-milestones, followed by the conformance suite, policy playground,
-observability, and reference deployments.
+Latch now secures MCP stdio, MCP Streamable HTTP, and generic HTTP APIs,
+alongside the stable Enforcement API and official Go, Python, and TypeScript
+SDKs. OpenAI-compatible tool calling, LangChain/LangGraph, shell, and CI/CD
+adapters remain the next v0.2 adapter milestones, followed by the conformance
+suite, policy playground, observability, and reference deployments.
 
 Run the suite with:
 

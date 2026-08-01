@@ -296,6 +296,103 @@ latch integrations mcp --client generic --name protected --agent desktop-agent -
     ],
   },
   {
+    slug: "mcp-http",
+    group: "Integrate",
+    title: "MCP Streamable HTTP gateway",
+    summary:
+      "Protect remote MCP JSON and SSE sessions through an authenticated, fail-closed boundary.",
+    readingTime: "8 min",
+    sections: [
+      {
+        id: "start",
+        title: "Start the boundary",
+        paragraphs: [
+          "Clients connect to Latch while the real MCP endpoint and its credentials remain operator-controlled.",
+        ],
+        code: `export LATCH_MCP_TOKEN="$(openssl rand -hex 32)"
+export LATCH_MCP_UPSTREAM_TOKEN="upstream-service-token"
+
+latch proxy-http \\
+  --config latch.yaml \\
+  --agent remote-agent \\
+  --upstream https://tools.example/mcp`,
+      },
+      {
+        id: "clients",
+        title: "Generate client configuration",
+        code: `latch integrations mcp-http \\
+  --client vscode \\
+  --name protected-tools \\
+  --url http://127.0.0.1:7071/mcp`,
+      },
+      {
+        id: "guarantees",
+        title: "Transport guarantees",
+        bullets: [
+          "Shared tools/call enforcement with the stdio adapter",
+          "POST, GET, DELETE, JSON, SSE, and session preservation",
+          "Separate client-facing and upstream bearer credentials",
+          "Exact origin allowlists and strict session validation",
+          "Duplicate-key JSON, redirects, oversized input, and state failures fail closed",
+        ],
+      },
+    ],
+  },
+  {
+    slug: "http-api",
+    group: "Integrate",
+    title: "Generic HTTP/API gateway",
+    summary:
+      "Point an existing HTTP tool at an allow-only reverse gateway without changing the upstream service.",
+    readingTime: "10 min",
+    sections: [
+      {
+        id: "start",
+        title: "Protect a fixed API",
+        paragraphs: [
+          "Latch evaluates the method, fixed-upstream URL, agent-controlled headers, query, and semantic body before forwarding. Only an explicit ALLOW crosses the boundary.",
+        ],
+        code: `export LATCH_HTTP_TOKEN="$(openssl rand -hex 32)"
+export SERVICE_AUTHORIZATION="Bearer upstream-service-token"
+
+latch proxy-api \\
+  --config latch.yaml \\
+  --agent api-agent \\
+  --upstream https://api.example/v1 \\
+  --upstream-header-env Authorization=SERVICE_AUTHORIZATION`,
+      },
+      {
+        id: "connect",
+        title: "Connect an existing tool",
+        code: `latch integrations http --url http://127.0.0.1:7072
+
+curl http://127.0.0.1:7072/customers/42 \\
+  -H "X-Latch-Token: $LATCH_HTTP_TOKEN"`,
+      },
+      {
+        id: "credentials",
+        title: "Separate credentials by authority",
+        bullets: [
+          "X-Latch-Token authenticates the caller and is never forwarded.",
+          "Operator upstream credentials are injected only after ALLOW and never enter action or audit data.",
+          "Agent authorization, cookies, and API keys are stripped by default.",
+          "Dynamic credential forwarding is explicit and remains visible to protected risk analysis.",
+        ],
+      },
+      {
+        id: "inspection",
+        title: "Semantic and fail-closed inspection",
+        bullets: [
+          "JSON rejects duplicate keys at every depth.",
+          "JSON, forms, and UTF-8 text are parsed up to 256 KiB.",
+          "Opaque or larger bodies receive an uninspected-body risk signal and require scrutiny.",
+          "Compressed bodies, unsafe paths, CONNECT, TRACE, and upstream redirects are rejected.",
+          "Audit, approval, budget, and upstream failures never fall back to direct access.",
+        ],
+      },
+    ],
+  },
+  {
     slug: "identities-budgets",
     group: "Configure",
     title: "Identities & budgets",
@@ -503,8 +600,13 @@ LATCH_AUDIT_TERMINAL=true`,
         code: `latch init [--profile balanced|strict|developer]
 latch doctor [--config policy.yaml] [--agent <trusted-id>] [-- server]
 latch integrations mcp --client <claude|cursor|vscode|generic> -- server
+latch integrations mcp-http --client <claude-code|cursor|vscode|generic>
+latch integrations http [--url http://127.0.0.1:7072]
 latch check --tool <name> [--arg key=value] [options]
 latch proxy [options] -- <mcp-server-command> [args...]
+latch proxy-http --upstream <https://server/mcp> [options]
+latch proxy-api --upstream <https://api.example> [options]
+latch serve [--listen 127.0.0.1:7070] [options]
 latch run --input <actions.jsonl> [--config policy.yaml]
 latch policies list|validate [--config policy.yaml]
 latch identities list [--config policy.yaml] [--json]
@@ -581,8 +683,9 @@ latch version [--json]`,
         title: "Fail-closed conditions",
         bullets: [
           "Malformed, unsupported, or excessively nested syntax",
-          "Invalid or oversized MCP messages",
+          "Invalid or oversized MCP and HTTP messages",
           "Invalid upstream protocol output",
+          "Forbidden upstream redirects or unavailable upstream services",
           "Approval-store read or write failure",
           "Budget corruption, contention, or inaccessible state",
           "Required audit write failure",
@@ -592,8 +695,8 @@ latch version [--json]`,
         id: "current-boundary",
         title: "Current boundary",
         paragraphs: [
-          "The current release secures local MCP stdio servers, operator-bound local identities, capability ceilings, cumulative budgets, local approvals, and structured shell, HTTP, SQL, and filesystem inspection.",
-          "Streamable HTTP proxying, cryptographic remote-agent identity, and centrally authenticated remote approvers remain follow-up priorities. Local launcher identity must not be represented as remote cryptographic authentication.",
+          "The current release secures MCP stdio, MCP Streamable HTTP, and generic HTTP APIs, with operator-bound identities, capability ceilings, cumulative budgets, exact local approvals, and structured shell, HTTP, SQL, and filesystem inspection.",
+          "OpenAI-compatible tool calling, LangChain/LangGraph, shell execution, CI/CD, cryptographic remote-agent identity, and centrally authenticated remote approvers remain follow-up priorities.",
         ],
       },
       {

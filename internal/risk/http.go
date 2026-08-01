@@ -100,6 +100,11 @@ func collectHTTPArguments(arguments map[string]any, collector *signalCollector) 
 	case "PATCH", "PUT":
 		collector.add("state-changing-http-request", 25, "State-changing HTTP request detected")
 	}
+	if inspected, present := firstValue(arguments, "body_inspected"); present {
+		if complete, valid := inspected.(bool); !valid || !complete {
+			collector.add("uninspected-http-body", 40, "HTTP request body could not be semantically inspected")
+		}
+	}
 
 	hasCredentials := containsSensitiveHeaders(arguments)
 	hasSensitivePayload := containsSensitivePayload(arguments)
@@ -328,6 +333,11 @@ func sensitiveHeader(name string) bool {
 	}
 }
 
+// IsSensitiveHeader identifies credential-bearing HTTP header names. Adapters
+// use the same classification as the risk engine when separating credentials
+// from agent-controlled request data.
+func IsSensitiveHeader(name string) bool { return sensitiveHeader(name) }
+
 func sensitiveName(name string) bool {
 	normalized := normalizeFieldName(name)
 	for _, fragment := range []string{
@@ -341,6 +351,9 @@ func sensitiveName(name string) bool {
 	}
 	return false
 }
+
+// IsSensitiveName identifies common secret-bearing field and query names.
+func IsSensitiveName(name string) bool { return sensitiveName(name) }
 
 func normalizeFieldName(name string) string {
 	name = strings.ToLower(strings.TrimSpace(name))

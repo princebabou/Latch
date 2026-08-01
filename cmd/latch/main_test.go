@@ -247,6 +247,38 @@ func TestMCPHTTPIntegrationGeneratesSecretSafeClientConfiguration(t *testing.T) 
 	}
 }
 
+func TestHTTPIntegrationGeneratesSecretSafeGatewayConfiguration(t *testing.T) {
+	var out, errOut bytes.Buffer
+	code := run([]string{
+		"integrations", "http", "--url", "https://latch.example/gateway",
+		"--auth-header", "X-Latch-Key", "--token-env", "MY_LATCH_TOKEN",
+	}, strings.NewReader(""), &out, &errOut)
+	if code != 0 {
+		t.Fatalf("exit code = %d, stderr = %q", code, errOut.String())
+	}
+	var config httpGatewayConfig
+	if err := json.Unmarshal(out.Bytes(), &config); err != nil {
+		t.Fatal(err)
+	}
+	if config.BaseURL != "https://latch.example/gateway" || config.Headers["X-Latch-Key"] != "${MY_LATCH_TOKEN}" {
+		t.Fatalf("configuration = %#v", config)
+	}
+}
+
+func TestParseUpstreamHeaderEnvironmentsRequiresPresentSecrets(t *testing.T) {
+	t.Setenv("LATCH_TEST_API_KEY", "operator-secret")
+	headers, err := parseUpstreamHeaderEnvironments([]string{"X-API-Key=LATCH_TEST_API_KEY"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if headers.Get("X-API-Key") != "operator-secret" {
+		t.Fatalf("headers = %#v", headers)
+	}
+	if _, err := parseUpstreamHeaderEnvironments([]string{"Authorization=LATCH_MISSING_SECRET"}); err == nil {
+		t.Fatal("missing upstream secret was accepted")
+	}
+}
+
 func TestVersionJSONContainsBuildMetadata(t *testing.T) {
 	oldVersion, oldCommit, oldDate, oldBuiltBy := version, commit, date, builtBy
 	version, commit, date, builtBy = "v1.2.3", "abc123", "2026-07-30T00:00:00Z", "test"

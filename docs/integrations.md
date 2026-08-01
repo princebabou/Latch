@@ -1,14 +1,16 @@
 # Integrating Latch
 
-Latch has four stable integration surfaces:
+Latch has five stable integration surfaces:
 
 1. `latch proxy` is a transparent security boundary for local MCP stdio
    servers.
 2. `latch proxy-http` protects MCP Streamable HTTP servers while preserving
    JSON, SSE, and session behavior.
-3. The versioned Enforcement API and official SDKs embed Latch into existing
+3. `latch proxy-api` protects ordinary HTTP APIs without changing the upstream
+   service or the calling tool's request format.
+4. The versioned Enforcement API and official SDKs embed Latch into existing
    Go, Python, and TypeScript tool runners.
-4. `latch check` is a protocol-neutral policy gate for scripts, CI jobs,
+5. `latch check` is a protocol-neutral policy gate for scripts, CI jobs,
    orchestrators, and tool wrappers.
 
 ## Three-command MCP setup
@@ -91,6 +93,34 @@ consumed by Latch and is not sent upstream. Set
 See [MCP Streamable HTTP](mcp-streamable-http.md) for the complete transport and
 deployment contract.
 
+## Generic HTTP/API setup
+
+Place an allow-only gateway in front of a fixed API base URL:
+
+```sh
+export LATCH_HTTP_TOKEN="$(openssl rand -hex 32)"
+export SERVICE_AUTHORIZATION="Bearer upstream-service-token"
+
+latch proxy-api --config latch.yaml --agent api-agent \
+  --upstream https://api.example/v1 \
+  --upstream-header-env Authorization=SERVICE_AUTHORIZATION
+```
+
+Point an existing HTTP tool at `http://127.0.0.1:7072` and add
+`X-Latch-Token: $LATCH_HTTP_TOKEN`. The caller keeps its paths, query, methods,
+and bodies; the upstream base and its credentials remain operator-controlled.
+
+```sh
+latch integrations http --url http://127.0.0.1:7072
+```
+
+Client authorization and cookies are stripped by default. Configure upstream
+secrets through environment variables, or explicitly opt into dynamic
+credential forwarding so Latch evaluates the resulting external credential
+movement. See [Generic HTTP/API gateway](http-api-gateway.md) for the complete
+request model, status contract, body inspection limits, policy examples, and
+deployment controls.
+
 ## Trust binding
 
 The `--agent` value belongs in operator-controlled launcher configuration.
@@ -166,6 +196,9 @@ overrides are also available:
 | `LATCH_MCP_LISTEN` | Streamable HTTP proxy listen address |
 | `LATCH_MCP_TOKEN` | Client-facing Streamable HTTP bearer token |
 | `LATCH_MCP_UPSTREAM_TOKEN` | Separate upstream MCP bearer token |
+| `LATCH_HTTP_LISTEN` | Generic HTTP/API gateway listen address |
+| `LATCH_HTTP_TOKEN` | Generic gateway client authentication token |
+| `LATCH_HTTP_UPSTREAM_TOKEN` | Operator-controlled upstream API bearer token |
 | `LATCH_AUDIT_PATH` | Audit JSONL location |
 | `LATCH_APPROVAL_STORE` | Durable approval store |
 | `LATCH_BUDGET_STORE` | Durable budget store |

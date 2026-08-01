@@ -82,6 +82,13 @@ func TestHTTPAnalyzerClassifiesDestinationsAndDataFlow(t *testing.T) {
 			want:      []string{"destructive-http-request"},
 		},
 		{
+			name: "opaque body requires scrutiny",
+			arguments: map[string]any{
+				"url": "https://api.example.test/upload", "method": "POST", "body_inspected": false,
+			},
+			want: []string{"uninspected-http-body"},
+		},
+		{
 			name:      "malformed endpoint",
 			arguments: map[string]any{"url": "api.example.test/v1"},
 			want:      []string{"http-parse-ambiguity"},

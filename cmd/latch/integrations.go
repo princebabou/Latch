@@ -27,9 +27,14 @@ type mcpRemoteConfig struct {
 	Headers map[string]string `json:"headers,omitempty"`
 }
 
+type httpGatewayConfig struct {
+	BaseURL string            `json:"base_url"`
+	Headers map[string]string `json:"headers,omitempty"`
+}
+
 func integrations(args []string, out, errOut io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errOut, "Usage: latch integrations mcp|mcp-http [options]")
+		fmt.Fprintln(errOut, "Usage: latch integrations mcp|mcp-http|http [options]")
 		return 64
 	}
 	switch args[0] {
@@ -37,10 +42,49 @@ func integrations(args []string, out, errOut io.Writer) int {
 		return mcpIntegration(args[1:], out, errOut)
 	case "mcp-http":
 		return mcpHTTPIntegration(args[1:], out, errOut)
+	case "http":
+		return httpIntegration(args[1:], out, errOut)
 	default:
 		fmt.Fprintf(errOut, "Unknown integration %q\n", args[0])
 		return 64
 	}
+}
+
+func httpIntegration(args []string, out, errOut io.Writer) int {
+	fs := flag.NewFlagSet("integrations http", flag.ContinueOnError)
+	fs.SetOutput(errOut)
+	endpoint := fs.String("url", "http://127.0.0.1:7072", "Latch HTTP/API gateway base URL")
+	authHeader := fs.String("auth-header", "X-Latch-Token", "request header carrying the Latch gateway token")
+	tokenEnvironment := fs.String("token-env", "LATCH_HTTP_TOKEN", "client environment variable containing the gateway token")
+	noAuth := fs.Bool("no-auth", false, "generate an authless local configuration")
+	outputPath := fs.String("output", "-", "destination JSON path, or - for stdout")
+	force := fs.Bool("force", false, "replace an existing destination")
+	if err := fs.Parse(args); err != nil {
+		return 64
+	}
+	if fs.NArg() != 0 {
+		fmt.Fprintln(errOut, "integrations http does not accept positional arguments")
+		return 64
+	}
+	if !validMCPURL(*endpoint) {
+		fmt.Fprintln(errOut, "--url must be an absolute HTTP or HTTPS URL without credentials, query, or fragment")
+		return 64
+	}
+	header := strings.TrimSpace(*authHeader)
+	if header == "" || strings.ContainsAny(header, " \t\r\n:") {
+		fmt.Fprintln(errOut, "--auth-header must be a valid HTTP header name")
+		return 64
+	}
+	tokenName := strings.TrimSpace(*tokenEnvironment)
+	if !*noAuth && !validEnvironmentName(tokenName) {
+		fmt.Fprintln(errOut, "--token-env must be a valid environment variable name")
+		return 64
+	}
+	config := httpGatewayConfig{BaseURL: strings.TrimSuffix(*endpoint, "/")}
+	if !*noAuth {
+		config.Headers = map[string]string{header: "${" + tokenName + "}"}
+	}
+	return writeIntegrationDocument(config, "http", *outputPath, *force, out, errOut)
 }
 
 func mcpIntegration(args []string, out, errOut io.Writer) int {

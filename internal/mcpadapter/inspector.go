@@ -8,11 +8,11 @@ import (
 	"io"
 	"strings"
 	"sync"
-	"unicode/utf8"
 
 	"github.com/princebabou/Latch/internal/audit"
 	"github.com/princebabou/Latch/internal/decision"
 	"github.com/princebabou/Latch/internal/normalize"
+	"github.com/princebabou/Latch/internal/strictjson"
 	"github.com/princebabou/Latch/pkg/models"
 )
 
@@ -171,92 +171,14 @@ func ValidateServerMessage(message []byte) error {
 
 // DecodeObject parses exactly one UTF-8 JSON object.
 func DecodeObject(message []byte) (map[string]json.RawMessage, error) {
-	if !utf8.Valid(message) {
-		return nil, fmt.Errorf("message is not valid UTF-8")
-	}
-	if err := rejectDuplicateKeys(message); err != nil {
-		return nil, err
-	}
-	decoder := json.NewDecoder(bytes.NewReader(message))
 	var object map[string]json.RawMessage
-	if err := decoder.Decode(&object); err != nil {
+	if err := strictjson.Decode(message, &object); err != nil {
 		return nil, err
 	}
 	if object == nil {
 		return nil, fmt.Errorf("message must be a JSON object")
 	}
-	var extra any
-	if err := decoder.Decode(&extra); err != io.EOF {
-		if err == nil {
-			return nil, fmt.Errorf("message must contain exactly one JSON object")
-		}
-		return nil, err
-	}
 	return object, nil
-}
-
-func rejectDuplicateKeys(message []byte) error {
-	decoder := json.NewDecoder(bytes.NewReader(message))
-	decoder.UseNumber()
-	if err := walkJSONValue(decoder); err != nil {
-		return err
-	}
-	if _, err := decoder.Token(); err != io.EOF {
-		if err == nil {
-			return fmt.Errorf("message must contain exactly one JSON value")
-		}
-		return err
-	}
-	return nil
-}
-
-func walkJSONValue(decoder *json.Decoder) error {
-	token, err := decoder.Token()
-	if err != nil {
-		return err
-	}
-	delimiter, structured := token.(json.Delim)
-	if !structured {
-		return nil
-	}
-	switch delimiter {
-	case '{':
-		seen := map[string]struct{}{}
-		for decoder.More() {
-			keyToken, err := decoder.Token()
-			if err != nil {
-				return err
-			}
-			key, ok := keyToken.(string)
-			if !ok {
-				return fmt.Errorf("JSON object key must be a string")
-			}
-			if _, duplicate := seen[key]; duplicate {
-				return fmt.Errorf("duplicate JSON object key %q", key)
-			}
-			seen[key] = struct{}{}
-			if err := walkJSONValue(decoder); err != nil {
-				return err
-			}
-		}
-		closing, err := decoder.Token()
-		if err != nil || closing != json.Delim('}') {
-			return fmt.Errorf("invalid JSON object")
-		}
-	case '[':
-		for decoder.More() {
-			if err := walkJSONValue(decoder); err != nil {
-				return err
-			}
-		}
-		closing, err := decoder.Token()
-		if err != nil || closing != json.Delim(']') {
-			return fmt.Errorf("invalid JSON array")
-		}
-	default:
-		return fmt.Errorf("unexpected JSON delimiter %q", delimiter)
-	}
-	return nil
 }
 
 // ProtocolError creates a complete JSON-RPC error object suitable for either
