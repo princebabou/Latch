@@ -1,6 +1,6 @@
 # Integrating Latch
 
-Latch has eight stable integration surfaces:
+Latch has nine stable integration surfaces:
 
 1. `latch proxy` is a transparent security boundary for local MCP stdio
    servers.
@@ -16,7 +16,9 @@ Latch has eight stable integration surfaces:
    argv or explicit shell text before a local child starts.
 7. The versioned Enforcement API and official SDKs embed Latch into existing
    Go, Python, and TypeScript tool runners.
-8. `latch check` is a protocol-neutral policy gate for scripts, CI jobs,
+8. `latch ci` and the packaged GitHub Action provide fail-closed CI/CD gates,
+   native annotations, job summaries, and structured outputs.
+9. `latch check` is a protocol-neutral policy evaluator for scripts,
    orchestrators, and tool wrappers.
 
 ## Three-command MCP setup
@@ -223,7 +225,33 @@ long-lived secrets directly in committed client JSON; use the client's secret
 input mechanism, an operating-system credential store, or a short-lived
 launcher environment.
 
-## CI and ordinary tool wrappers
+## CI/CD and GitHub Actions
+
+Use the packaged action immediately before a deployment or release step:
+
+```yaml
+- id: latch
+  uses: princebabou/Latch@v0.2.0
+  with:
+    config: latch.yaml
+    agent: github-actions
+    tool: deployment.apply
+    operation: write
+    resource: production
+    arguments: '{"environment":"production"}'
+
+- if: steps.latch.outputs.allowed == 'true'
+  run: ./scripts/deploy.sh production
+```
+
+It installs an exact checksummed release across Linux, macOS, and Windows,
+emits a native annotation and job summary, and provides structured outputs.
+`BLOCK`, `REQUIRE_APPROVAL`, missing runner files, audit failures, and state
+failures stop the job. See [CI/CD and GitHub Actions](ci-cd-github-actions.md)
+for the complete action, reusable-workflow, output, approval, and hardening
+contract.
+
+## Ordinary tool wrappers
 
 `latch check` evaluates one normalized action and exits `0` only for
 `ALLOW`. It exits `3` for `BLOCK` and unresolved `REQUIRE_APPROVAL`, making it
@@ -246,7 +274,9 @@ does not execute it. This separation makes the policy decision reusable from
 shell scripts, CI systems, job schedulers, and custom orchestrators without
 giving the evaluator ambient execution authority.
 
-For bulk evaluation, send normalized JSON actions through `latch run
+For an immediate CI gate, use `latch ci`; unlike `check`, it reserves matching
+budget capacity, emits the stable v1 response, and writes provider-native
+reporting. For bulk evaluation, send normalized JSON actions through `latch run
 --input actions.jsonl`. It remains an evaluator and does not consume runtime
 budgets. Only an allowed call immediately about to cross `latch proxy`
 reserves budget capacity.

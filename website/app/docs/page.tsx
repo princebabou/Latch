@@ -13,12 +13,12 @@ export default function DocsIndex() {
   return (
     <DocsShell>
       <div className="docs-index-hero">
-        <span className="kicker">LATCH DOCUMENTATION / v0.1.1</span>
+        <span className="kicker">LATCH DOCUMENTATION / v0.2 PREVIEW</span>
         <h1>Build a boundary you can explain.</h1>
         <p>
           Everything you need to install Latch, protect an MCP server, write
-          policy, bind identities, operate approvals and budgets, and understand
-          the security model.
+          policy, bind identities, gate CI/CD, operate approvals and budgets,
+          and understand the security model.
         </p>
         <div>
           <Link className="button button-primary" href="/docs/quickstart">

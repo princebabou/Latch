@@ -38,8 +38,8 @@ export function DocsShell({
           <div className="docs-sidebar-status">
             <i className="live-dot" />
             <div>
-              <strong>Docs for v0.1.1</strong>
-              <span>Current release</span>
+              <strong>Docs for v0.2</strong>
+              <span>Preview</span>
             </div>
           </div>
         </aside>

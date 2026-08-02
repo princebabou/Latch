@@ -6,26 +6,32 @@ on:
       environment:
         description: Deployment environment
         required: true
-        default: staging
+        type: choice
+        options:
+          - staging
+          - production
 
 permissions:
   contents: read
 
 jobs:
-  evaluate:
+  protected-deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
+      - uses: actions/checkout@v7
+      - name: Enforce deployment policy
+        id: latch
+        uses: princebabou/Latch@v0.2.0
         with:
-          go-version: 1.24.13
-          cache: true
-      - name: Evaluate deployment action
-        run: |
-          go run ./cmd/latch check \
-            --config configs/latch.example.yaml \
-            --agent github-actions \
-            --tool deployment.apply \
-            --action write \
-            --arg environment=${{ inputs.environment }} \
-            --json
+          config: configs/latch.example.yaml
+          agent: github-actions
+          tool: deployment.apply
+          operation: write
+          resource: ${{ inputs.environment }}
+          arguments: ${{ toJSON(inputs) }}
+
+      # The action already exits non-zero for BLOCK and REQUIRE_APPROVAL. This
+      # explicit condition makes the execution boundary visible to reviewers.
+      - name: Deploy
+        if: steps.latch.outputs.allowed == 'true'
+        run: ./scripts/deploy.sh "${{ inputs.environment }}"

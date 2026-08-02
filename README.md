@@ -412,14 +412,41 @@ Official releases target Linux, macOS, and Windows on AMD64 and ARM64, include
 Linux packages and archive SBOMs, and publish a non-root multi-architecture
 container at `ghcr.io/princebabou/latch`.
 
+### GitHub Actions policy gate
+
+Place the packaged action immediately before the real side effect:
+
+```yaml
+- uses: princebabou/Latch@v0.2.0
+  id: latch
+  with:
+    config: latch.yaml
+    agent: github-actions
+    tool: deployment.apply
+    operation: write
+    resource: production
+    arguments: '{"environment":"production"}'
+
+- if: steps.latch.outputs.allowed == 'true'
+  run: ./scripts/deploy.sh production
+```
+
+The action installs an exact checksummed release on Linux, macOS, or Windows,
+then produces a native annotation, job summary, stable decision output, and
+machine-readable reasons. It exits successfully only for `ALLOW`; blocks,
+unresolved approvals, reporting failures, audit failures, and unavailable state
+all stop the job. Pin the action to a full commit SHA in high-assurance
+workflows. See [CI/CD and GitHub Actions](docs/ci-cd-github-actions.md) for the
+reusable workflow and complete hardening contract.
+
 ## Current boundary
 
 Latch now secures MCP stdio, MCP Streamable HTTP, generic HTTP APIs, and
 OpenAI-compatible Responses API and Chat Completions function calls, alongside
 native LangChain middleware, protected LangGraph ToolNodes, fail-closed local
-process execution, the stable Enforcement API, and official Go, Python, and
-TypeScript SDKs. CI/CD and GitHub Actions remain the next v0.2 adapter
-milestone, followed by the conformance suite, policy playground,
+process execution, a native CI adapter, packaged GitHub Action, reusable policy
+workflow, the stable Enforcement API, and official Go, Python, and TypeScript
+SDKs. The conformance suite remains the next v0.2 milestone, followed by the policy playground,
 observability, and reference deployments.
 
 Run the suite with:

@@ -44,7 +44,7 @@ export default async function DocArticle({ params }: { params: Params }) {
           <h1>{doc.title}</h1>
           <p>{doc.summary}</p>
           <div className="doc-meta">
-            <span>v0.1.1</span>
+            <span>v0.2 preview</span>
             <span>{doc.readingTime} read</span>
             <span>Source grounded</span>
           </div>

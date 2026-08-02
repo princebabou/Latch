@@ -1,0 +1,66 @@
+name: Reusable Latch policy gate
+
+on:
+  workflow_call:
+    inputs:
+      config:
+        description: Path to the caller repository's Latch policy
+        required: false
+        type: string
+        default: latch.yaml
+      agent:
+        description: Trusted agent identity bound by the calling workflow
+        required: true
+        type: string
+      tool:
+        description: Intended tool or capability
+        required: true
+        type: string
+      operation:
+        description: Normalized operation
+        required: false
+        type: string
+        default: ""
+      resource:
+        description: Intended resource
+        required: false
+        type: string
+        default: ""
+      arguments:
+        description: Strict JSON object of intended action arguments
+        required: false
+        type: string
+        default: "{}"
+    outputs:
+      request-id:
+        description: Unique Latch decision request identifier
+        value: ${{ jobs.enforce.outputs.request-id }}
+      decision:
+        description: ALLOW, BLOCK, or REQUIRE_APPROVAL
+        value: ${{ jobs.enforce.outputs.decision }}
+      allowed:
+        description: true only for an explicit ALLOW
+        value: ${{ jobs.enforce.outputs.allowed }}
+
+permissions:
+  contents: read
+
+jobs:
+  enforce:
+    runs-on: ubuntu-latest
+    outputs:
+      request-id: ${{ steps.latch.outputs.request-id }}
+      decision: ${{ steps.latch.outputs.decision }}
+      allowed: ${{ steps.latch.outputs.allowed }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Enforce Latch policy
+        id: latch
+        uses: princebabou/Latch@v0.2.0
+        with:
+          config: ${{ inputs.config }}
+          agent: ${{ inputs.agent }}
+          tool: ${{ inputs.tool }}
+          operation: ${{ inputs.operation }}
+          resource: ${{ inputs.resource }}
+          arguments: ${{ inputs.arguments }}

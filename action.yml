@@ -1,0 +1,125 @@
+name: Latch AI Agent Policy Gate
+description: Fail-closed policy enforcement for AI agent actions in GitHub Actions
+author: Latch
+
+inputs:
+  config:
+    description: Path to the Latch policy file
+    required: false
+    default: latch.yaml
+  agent:
+    description: Trusted agent identity bound by this workflow
+    required: true
+  tool:
+    description: Intended tool or capability name
+    required: true
+  operation:
+    description: Normalized operation such as read, write, execute, or delete
+    required: false
+    default: ""
+  resource:
+    description: Intended resource such as a file, URL, or deployment target
+    required: false
+    default: ""
+  arguments:
+    description: Strict JSON object containing the intended action arguments
+    required: false
+    default: "{}"
+  latch-version:
+    description: Exact Latch release to install when latch-binary is not supplied
+    required: false
+    default: v0.2.0
+  latch-binary:
+    description: Optional trusted Latch binary path; skips release installation
+    required: false
+    default: ""
+
+outputs:
+  request-id:
+    description: Unique Latch decision request identifier
+    value: ${{ steps.gate_unix.outputs.request_id || steps.gate_windows.outputs.request_id }}
+  decision:
+    description: ALLOW, BLOCK, or REQUIRE_APPROVAL
+    value: ${{ steps.gate_unix.outputs.decision || steps.gate_windows.outputs.decision }}
+  allowed:
+    description: true only when the explicit decision is ALLOW
+    value: ${{ steps.gate_unix.outputs.allowed || steps.gate_windows.outputs.allowed }}
+  approval-required:
+    description: true when an operator approval is required
+    value: ${{ steps.gate_unix.outputs.approval_required || steps.gate_windows.outputs.approval_required }}
+  fail-closed:
+    description: true when an operational safety failure forced a block
+    value: ${{ steps.gate_unix.outputs.fail_closed || steps.gate_windows.outputs.fail_closed }}
+  risk-score:
+    description: Deterministic risk score from 0 to 100
+    value: ${{ steps.gate_unix.outputs.risk_score || steps.gate_windows.outputs.risk_score }}
+  risk-level:
+    description: Human-readable risk level
+    value: ${{ steps.gate_unix.outputs.risk_level || steps.gate_windows.outputs.risk_level }}
+  decision-source:
+    description: Winning policy or security control
+    value: ${{ steps.gate_unix.outputs.decision_source || steps.gate_windows.outputs.decision_source }}
+  hard-deny:
+    description: true when a non-overridable hard deny fired
+    value: ${{ steps.gate_unix.outputs.hard_deny || steps.gate_windows.outputs.hard_deny }}
+  triggered-rules:
+    description: JSON array of triggered rule identifiers
+    value: ${{ steps.gate_unix.outputs.triggered_rules || steps.gate_windows.outputs.triggered_rules }}
+  reasons:
+    description: JSON array explaining the decision
+    value: ${{ steps.gate_unix.outputs.reasons || steps.gate_windows.outputs.reasons }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install verified Latch release
+      if: runner.os != 'Windows' && inputs.latch-binary == ''
+      shell: bash
+      env:
+        LATCH_VERSION: ${{ inputs.latch-version }}
+        LATCH_INSTALL_DIR: ${{ runner.temp }}/latch/bin
+      run: sh "$GITHUB_ACTION_PATH/scripts/install.sh"
+
+    - name: Install verified Latch release on Windows
+      if: runner.os == 'Windows' && inputs.latch-binary == ''
+      shell: pwsh
+      env:
+        LATCH_VERSION: ${{ inputs.latch-version }}
+        LATCH_INSTALL_DIR: ${{ runner.temp }}\latch\bin
+      run: >-
+        & "$env:GITHUB_ACTION_PATH\scripts\install.ps1"
+        -Version $env:LATCH_VERSION
+        -InstallDir $env:LATCH_INSTALL_DIR
+
+    - name: Enforce Latch policy
+      id: gate_unix
+      if: runner.os != 'Windows'
+      shell: bash
+      env:
+        LATCH_BINARY: ${{ inputs.latch-binary }}
+        LATCH_CONFIG_INPUT: ${{ inputs.config }}
+        LATCH_AGENT_INPUT: ${{ inputs.agent }}
+        LATCH_TOOL_INPUT: ${{ inputs.tool }}
+        LATCH_OPERATION_INPUT: ${{ inputs.operation }}
+        LATCH_RESOURCE_INPUT: ${{ inputs.resource }}
+        LATCH_ARGUMENTS_INPUT: ${{ inputs.arguments }}
+      run: sh "$GITHUB_ACTION_PATH/github-action/run.sh"
+
+    - name: Enforce Latch policy on Windows
+      id: gate_windows
+      if: runner.os == 'Windows'
+      shell: pwsh
+      env:
+        LATCH_BINARY: ${{ inputs.latch-binary }}
+        LATCH_CONFIG_INPUT: ${{ inputs.config }}
+        LATCH_AGENT_INPUT: ${{ inputs.agent }}
+        LATCH_TOOL_INPUT: ${{ inputs.tool }}
+        LATCH_OPERATION_INPUT: ${{ inputs.operation }}
+        LATCH_RESOURCE_INPUT: ${{ inputs.resource }}
+        LATCH_ARGUMENTS_INPUT: ${{ inputs.arguments }}
+      run: >-
+        & "$env:GITHUB_ACTION_PATH\github-action\run.ps1"
+
+branding:
+  icon: shield
+  color: purple

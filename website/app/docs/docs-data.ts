@@ -595,6 +595,127 @@ const result = await shell.run({
     ],
   },
   {
+    slug: "ci-cd-github-actions",
+    group: "Integrate",
+    title: "CI/CD & GitHub Actions",
+    summary:
+      "Put a native, fail-closed policy gate in front of deployments, releases, infrastructure changes, and automation.",
+    readingTime: "9 min",
+    sections: [
+      {
+        id: "one-step",
+        title: "Protect a deployment in one step",
+        paragraphs: [
+          "The packaged action installs an exact checksummed Latch release, evaluates the intended side effect, writes a GitHub annotation and job summary, and exposes structured outputs. The next step can run only after an explicit ALLOW.",
+        ],
+        code: `permissions:
+  contents: read
+
+steps:
+  - uses: actions/checkout@v7
+
+  - name: Enforce deployment policy
+    id: latch
+    uses: princebabou/Latch@v0.2.0
+    with:
+      config: latch.yaml
+      agent: github-actions
+      tool: deployment.apply
+      operation: write
+      resource: production
+      arguments: '{"environment":"production","service":"api"}'
+
+  - name: Deploy
+    if: steps.latch.outputs.allowed == 'true'
+    run: ./scripts/deploy.sh production`,
+        language: "yaml",
+        note: "Pin to a full release tag or immutable commit SHA. Never use continue-on-error on the Latch step.",
+      },
+      {
+        id: "contract",
+        title: "A gate later steps can trust",
+        bullets: [
+          "ALLOW returns success and sets allowed=true.",
+          "BLOCK and REQUIRE_APPROVAL stop the step with exit code 3.",
+          "Configuration, audit, state, installation, and reporting failures stop the step with exit code 1.",
+          "Outputs include request ID, decision, risk, source, hard-deny status, triggered rules, and reasons.",
+          "An ALLOW output is written only after required GitHub reporting succeeds.",
+        ],
+      },
+      {
+        id: "native-reporting",
+        title: "Native GitHub reporting",
+        paragraphs: [
+          "Every decision appears where maintainers already work: a notice, warning, or error annotation in the log and a compact Markdown decision card in the job summary.",
+          "Workflow-command control characters are escaped, and summary values are rendered as text. Model-controlled tool or resource values cannot create new annotations or inject raw HTML.",
+        ],
+      },
+      {
+        id: "cli",
+        title: "Use the same adapter in any CI system",
+        code: `latch ci \\
+  --provider generic \\
+  --config latch.yaml \\
+  --agent deployment-bot \\
+  --tool deployment.apply \\
+  --action write \\
+  --resource production \\
+  --arguments-json '{"environment":"production"}' \\
+  --json`,
+        language: "shell",
+        paragraphs: [
+          "Provider auto selects GitHub only when GITHUB_ACTIONS=true. Unlike the diagnostic check command, ci is an immediate execution gate: it audits the decision and reserves matching budget capacity before returning ALLOW.",
+        ],
+      },
+      {
+        id: "reusable-workflow",
+        title: "Separate policy from credentials",
+        paragraphs: [
+          "Use the included reusable workflow when enforcement should be its own read-only job. Give deployment credentials only to the downstream job that needs the explicit allow result.",
+        ],
+        code: `jobs:
+  policy:
+    uses: princebabou/Latch/.github/workflows/latch-policy-gate.yml@v0.2.0
+    with:
+      config: latch.yaml
+      agent: github-actions
+      tool: deployment.apply
+      operation: write
+      resource: production
+      arguments: '{"environment":"production"}'
+
+  deploy:
+    needs: policy
+    if: needs.policy.outputs.allowed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: ./scripts/deploy.sh production`,
+        language: "yaml",
+      },
+      {
+        id: "approvals",
+        title: "Approval stays explicit",
+        paragraphs: [
+          "CI never opens an interactive approval prompt. REQUIRE_APPROVAL stops the workflow and records the triggering rules. Issue an exact time-bound grant through an operator-controlled Latch environment and rerun, or add GitHub environment approval as a second platform-managed layer.",
+        ],
+        note: "Never translate REQUIRE_APPROVAL into ALLOW inside workflow YAML.",
+      },
+      {
+        id: "hardening",
+        title: "Production checklist",
+        bullets: [
+          "Pin Latch and third-party actions to immutable commit SHAs in high-assurance workflows.",
+          "Protect policy and workflow changes with review and branch rules.",
+          "Keep the gate job read-only and free of deployment secrets.",
+          "Pass intended action data as strict JSON, never as interpolated shell text.",
+          "Avoid parallel or alternate deployment paths that bypass the gate.",
+          "Treat GitHub metadata as audit context, never as authenticated identity.",
+        ],
+      },
+    ],
+  },
+  {
     slug: "identities-budgets",
     group: "Configure",
     title: "Identities & budgets",
@@ -805,6 +926,7 @@ latch integrations mcp --client <claude|cursor|vscode|generic> -- server
 latch integrations mcp-http --client <claude-code|cursor|vscode|generic>
 latch integrations http [--url http://127.0.0.1:7072]
 latch check --tool <name> [--arg key=value] [options]
+latch ci --agent <trusted-id> --tool <name> [options]
 latch proxy [options] -- <mcp-server-command> [args...]
 latch proxy-http --upstream <https://server/mcp> [options]
 latch proxy-api --upstream <https://api.example> [options]
@@ -829,6 +951,21 @@ latch version [--json]`,
   --tool deployment.apply \\
   --action write \\
   --arg environment=production \\
+  --json`,
+      },
+      {
+        id: "ci",
+        title: "ci",
+        paragraphs: [
+          "Evaluate an immediate CI action, write provider-native reporting, audit the decision, and reserve matching budget capacity for ALLOW. Provider github emits annotations, job summaries, and structured step outputs. Provider generic works in other CI systems.",
+        ],
+        code: `latch ci \\
+  --provider github \\
+  --config latch.yaml \\
+  --agent github-actions \\
+  --tool deployment.apply \\
+  --action write \\
+  --arguments-json '{"environment":"production"}' \\
   --json`,
       },
       {
@@ -897,8 +1034,8 @@ latch version [--json]`,
         id: "current-boundary",
         title: "Current boundary",
         paragraphs: [
-          "The current release secures MCP stdio, MCP Streamable HTTP, generic HTTP APIs, OpenAI-compatible function calls, LangChain agents, LangGraph ToolNodes, and fingerprint-bound local process execution, with operator-bound identities, capability ceilings, cumulative budgets, exact local approvals, and structured shell, HTTP, SQL, and filesystem inspection.",
-          "CI/CD, cryptographic remote-agent identity, and centrally authenticated remote approvers remain follow-up priorities.",
+          "The v0.2 preview secures MCP stdio, MCP Streamable HTTP, generic HTTP APIs, OpenAI-compatible function calls, LangChain agents, LangGraph ToolNodes, fingerprint-bound local process execution, and CI/CD gates with native GitHub Actions reporting.",
+          "Cryptographic remote-agent identity, centrally authenticated remote approvers, the cross-adapter conformance suite, policy playground, and observability remain follow-up priorities.",
         ],
       },
       {

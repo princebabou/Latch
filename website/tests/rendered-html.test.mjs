@@ -50,6 +50,13 @@ test("server-renders documentation and playground routes", async () => {
   assert.match(shellHtml, /Fingerprint the executable/);
   assert.match(shellHtml, /@latch-security\/sdk\/shell/);
 
+  const ciResponse = await render("/docs/ci-cd-github-actions");
+  const ciHtml = await ciResponse.text();
+  assert.equal(ciResponse.status, 200);
+  assert.match(ciHtml, /CI\/CD &amp; GitHub Actions/);
+  assert.match(ciHtml, /princebabou\/Latch@v0\.2\.0/);
+  assert.match(ciHtml, /allowed == &#x27;true&#x27;/);
+
   const playgroundResponse = await render("/playground");
   const playgroundHtml = await playgroundResponse.text();
   assert.equal(playgroundResponse.status, 200);

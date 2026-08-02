@@ -136,6 +136,27 @@ hop; prefer upstream TLS when available.
   but do not make enforcement depend on a remote log collector.
 - Run `latch doctor` in deployment validation before starting the launcher.
 
+## GitHub Actions
+
+The repository root is a cross-platform composite action. It installs an exact
+release and verifies its checksum before running the native CI adapter:
+
+```yaml
+- uses: princebabou/Latch@v0.2.0
+  id: latch
+  with:
+    config: latch.yaml
+    agent: github-actions
+    tool: deployment.apply
+    operation: write
+    arguments: '{"environment":"production"}'
+```
+
+Pin to a commit SHA for the strongest integrity. Keep the gate job read-only,
+never use `continue-on-error`, and place deployment credentials only after an
+explicit `allowed == 'true'` result. See
+[CI/CD and GitHub Actions](ci-cd-github-actions.md).
+
 ## Release process
 
 Pushing a `v*` tag triggers:

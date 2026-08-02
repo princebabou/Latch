@@ -89,6 +89,59 @@ jobs:
         working-directory: sdk/typescript
         run: npm test
 
+  github-action:
+    name: GitHub Action (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+          - macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: 1.24.13
+          cache: true
+      - name: Build local Latch binary
+        id: build_unix
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/latch-ci"
+          go build -trimpath -o "$RUNNER_TEMP/latch-ci/latch" ./cmd/latch
+          echo "binary=$RUNNER_TEMP/latch-ci/latch" >> "$GITHUB_OUTPUT"
+      - name: Build local Latch binary on Windows
+        id: build_windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $directory = Join-Path $env:RUNNER_TEMP "latch-ci"
+          New-Item -ItemType Directory -Force -Path $directory | Out-Null
+          $binary = Join-Path $directory "latch.exe"
+          go build -trimpath -o $binary ./cmd/latch
+          "binary=$binary" >> $env:GITHUB_OUTPUT
+      - name: Enforce a deployment policy with the packaged action
+        id: latch_gate
+        uses: ./
+        with:
+          latch-binary: ${{ steps.build_unix.outputs.binary || steps.build_windows.outputs.binary }}
+          config: configs/latch.example.yaml
+          agent: github-actions
+          tool: deployment.apply
+          operation: write
+          arguments: '{"environment":"staging"}'
+      - name: Verify action outputs
+        shell: bash
+        env:
+          LATCH_DECISION: ${{ steps.latch_gate.outputs.decision }}
+          LATCH_ALLOWED: ${{ steps.latch_gate.outputs.allowed }}
+        run: |
+          test "$LATCH_DECISION" = "ALLOW"
+          test "$LATCH_ALLOWED" = "true"
+
   container:
     name: Container
     runs-on: ubuntu-latest

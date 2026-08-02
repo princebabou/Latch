@@ -32,7 +32,7 @@ const integrations = [
   ["Claude Desktop", "Native launcher configuration"],
   ["Cursor", "Project-level MCP protection"],
   ["VS Code", "Generated stdio server registration"],
-  ["CI / CD", "Exit-code friendly policy gates"],
+  ["CI / CD", "Native GitHub Action, summaries, and outputs"],
   ["Any tool wrapper", "Protocol-neutral check contract"],
 ];
 
@@ -64,7 +64,7 @@ export default function Home() {
             </Link>
           </div>
           <div className="hero-proof" aria-label="Project status">
-            <span>v0.1.1</span>
+            <span>v0.2 preview</span>
             <span>Apache-2.0</span>
             <span>Fail closed</span>
           </div>
@@ -360,7 +360,7 @@ export default function Home() {
             <span>
               <i className="live-dot" /> Project operational
             </span>
-            <small>v0.1.1 · Apache-2.0</small>
+            <small>v0.2 preview · Apache-2.0</small>
           </div>
         </div>
       </footer>
