@@ -19,6 +19,11 @@ protected LangGraph ToolNodes. The ToolNode adapters authorize a complete
 parallel batch before framework execution begins. See the
 [LangChain/LangGraph integration guide](langchain-langgraph.md).
 
+All three SDKs include a protected local process executor. It resolves and
+fingerprints the child executable, snapshots cwd and environment, submits the
+same `shell.exec` action, and starts the process only after an explicit ALLOW.
+See the [shell execution guide](shell-execution.md).
+
 Start an authenticated local API before trying an SDK:
 
 ```sh
@@ -53,6 +58,13 @@ result, err := client.Guard(ctx, v1.Action{
     Arguments: map[string]any{"path": "./README.md"},
 }, func(context.Context) error {
     return runTool()
+})
+
+shell, err := latch.NewShellExecutor(client)
+result, err := shell.Run(ctx, latch.ShellCommand{
+    ExecutionID: "agent:git-status:001",
+    Executable:  "git",
+    Args:        []string{"status", "--short"},
 })
 ```
 
@@ -92,6 +104,13 @@ adapter = OpenAIToolAdapter(latch, {"get_weather": get_weather})
 outputs = adapter.execute_responses(response)
 ```
 
+```python
+from latch_sdk import ShellExecutor
+
+shell = ShellExecutor(latch)
+result = shell.run("agent:git-status:001", "git", ("status", "--short"))
+```
+
 ## TypeScript
 
 The zero-runtime-dependency ESM package is in `sdk/typescript`. It supports
@@ -118,6 +137,20 @@ while they are read.
 ```ts
 const adapter = new OpenAIToolAdapter(latch, { get_weather: getWeather });
 const messages = await adapter.executeChatCompletion(completion);
+```
+
+The Node-only executor is a separate export so the base client remains usable
+in browsers:
+
+```ts
+import { ShellExecutor } from "@latch-security/sdk/shell";
+
+const shell = new ShellExecutor(latch);
+const result = await shell.run({
+  executionId: "agent:git-status:001",
+  executable: "git",
+  args: ["status", "--short"],
+});
 ```
 
 ## Error handling

@@ -18,6 +18,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./shell": {
+      "types": "./dist/shell.d.ts",
+      "import": "./dist/shell.js"
     }
   },
   "files": [
@@ -35,6 +39,7 @@
   },
   "devDependencies": {
     "@langchain/langgraph": "1.4.7",
+    "@types/node": "22.15.3",
     "langchain": "1.5.2",
     "typescript": "5.9.3",
     "zod": "4.4.3"

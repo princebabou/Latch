@@ -37,3 +37,19 @@ outputs, err := adapter.ExecuteResponses(ctx, responseJSON)
 
 The adapter validates and allows the complete batch before executing any
 handler. It also supports Chat Completions through `ExecuteChatCompletion`.
+
+Protect a local child process with structured argv:
+
+```go
+shell, err := latch.NewShellExecutor(client)
+result, err := shell.Run(ctx, latch.ShellCommand{
+    ExecutionID: "agent:git-status:001",
+    Executable:  "git",
+    Args:        []string{"status", "--short"},
+})
+```
+
+Use `RunShell` only for intentional shell syntax. Both paths resolve and
+fingerprint the executable, snapshot cwd and environment, fail closed on every
+non-allow result, consume replay IDs before process start, and bound runtime
+and output.

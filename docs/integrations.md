@@ -1,6 +1,6 @@
 # Integrating Latch
 
-Latch has seven stable integration surfaces:
+Latch has eight stable integration surfaces:
 
 1. `latch proxy` is a transparent security boundary for local MCP stdio
    servers.
@@ -12,9 +12,11 @@ Latch has seven stable integration surfaces:
    Chat Completions tool calls before registered handlers run.
 5. Native LangChain middleware and protected LangGraph ToolNodes cover standard
    agents and whole parallel tool batches.
-6. The versioned Enforcement API and official SDKs embed Latch into existing
+6. Fail-closed Go, Python, and TypeScript process executors protect structured
+   argv or explicit shell text before a local child starts.
+7. The versioned Enforcement API and official SDKs embed Latch into existing
    Go, Python, and TypeScript tool runners.
-7. `latch check` is a protocol-neutral policy gate for scripts, CI jobs,
+8. `latch check` is a protocol-neutral policy gate for scripts, CI jobs,
    orchestrators, and tool wrappers.
 
 ## Three-command MCP setup
@@ -162,6 +164,30 @@ tool_node = LatchToolNode(tools, latch)
 See [LangChain and LangGraph](langchain-langgraph.md) for installation, Python
 and TypeScript examples, middleware composition, batch behavior, and security
 bounds.
+
+## Protected shell and local processes
+
+Use the SDK executor instead of calling the operating-system process API
+directly. Structured argv is the default; shell text requires an explicit
+method:
+
+```python
+from latch_sdk import ShellExecutor
+
+shell = ShellExecutor(latch)
+result = shell.run(
+    "agent:git-status:001",
+    "git",
+    ("status", "--short"),
+    cwd=workspace,
+)
+```
+
+The executor resolves and fingerprints the executable, snapshots the cwd and
+environment, obtains an explicit `ALLOW`, rechecks mutable paths, consumes the
+replay ID, then starts a bounded child process. See
+[protected shell execution](shell-execution.md) for Go, Python, TypeScript,
+approval retry, privacy, limits, and sandboxing guidance.
 
 ## Trust binding
 

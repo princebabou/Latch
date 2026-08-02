@@ -1,6 +1,7 @@
 package risk
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -29,43 +30,111 @@ type shellProgram struct {
 }
 
 func collectShellSignals(action models.Action, collector *signalCollector) {
+	commandAnalyzed := false
 	if command, ok := firstValue(action.Arguments, "command", "cmd", "script"); ok {
 		switch typed := command.(type) {
 		case string:
 			analyzeShellText(typed, collector, 0)
-			return
+			commandAnalyzed = true
 		case []string:
 			analyzeShellCommands([]shellCommand{{words: append([]string(nil), typed...)}}, collector, 0)
-			return
+			commandAnalyzed = true
 		case []any:
 			if words, ok := stringValues(typed); ok {
 				analyzeShellCommands([]shellCommand{{words: words}}, collector, 0)
-				return
+				commandAnalyzed = true
+			} else {
+				collector.add("shell-parse-ambiguity", 45, "Command array contains a non-text argument")
 			}
-			collector.add("shell-parse-ambiguity", 45, "Command array contains a non-text argument")
 		default:
 			collector.add("shell-parse-ambiguity", 45, "Shell command could not be interpreted safely")
 		}
 	}
 
-	executable := firstString(action.Arguments, "executable", "program", "binary")
-	if executable == "" {
-		return
-	}
-	words := []string{executable}
-	if rawArgs, ok := firstValue(action.Arguments, "args", "argv", "arguments"); ok {
-		switch typed := rawArgs.(type) {
-		case []string:
-			words = append(words, typed...)
-		case []any:
-			if values, ok := stringValues(typed); ok {
-				words = append(words, values...)
-			} else {
-				collector.add("shell-parse-ambiguity", 45, "Executable arguments could not be interpreted safely")
+	if !commandAnalyzed {
+		executable := firstString(action.Arguments, "executable", "program", "binary")
+		if executable != "" {
+			words := []string{executable}
+			if rawArgs, ok := firstValue(action.Arguments, "args", "argv", "arguments"); ok {
+				switch typed := rawArgs.(type) {
+				case []string:
+					words = append(words, typed...)
+				case []any:
+					if values, ok := stringValues(typed); ok {
+						words = append(words, values...)
+					} else {
+						collector.add("shell-parse-ambiguity", 45, "Executable arguments could not be interpreted safely")
+					}
+				}
 			}
+			analyzeShellCommands([]shellCommand{{words: words}}, collector, 0)
 		}
 	}
-	analyzeShellCommands([]shellCommand{{words: words}}, collector, 0)
+
+	collectShellEnvironmentSignals(action.Arguments, collector)
+	collectShellStdinSignals(action.Arguments, collector)
+}
+
+func collectShellEnvironmentSignals(arguments map[string]any, collector *signalCollector) {
+	raw, exists := arguments["environment_changes"]
+	if !exists {
+		return
+	}
+	changes, ok := raw.([]any)
+	if !ok {
+		collector.add("shell-parse-ambiguity", 45, "Environment changes could not be interpreted safely")
+		return
+	}
+	if len(changes) > 0 {
+		collector.add("process-environment-modification", 20, "Process environment variables are changed")
+	}
+	for _, rawChange := range changes {
+		change, ok := rawChange.(map[string]any)
+		if !ok {
+			collector.add("shell-parse-ambiguity", 45, "Environment change entry could not be interpreted safely")
+			continue
+		}
+		name, ok := change["name"].(string)
+		if !ok || strings.TrimSpace(name) == "" {
+			collector.add("shell-parse-ambiguity", 45, "Environment change is missing a variable name")
+			continue
+		}
+		switch strings.ToUpper(name) {
+		case "PATH", "PATHEXT":
+			collector.add("process-search-path-modification", 45, "Process search path is modified")
+		case "BASH_ENV", "ENV", "SHELLOPTS", "BASHOPTS", "PROMPT_COMMAND", "PS4",
+			"LD_PRELOAD", "LD_LIBRARY_PATH", "DYLD_INSERT_LIBRARIES", "DYLD_LIBRARY_PATH",
+			"PYTHONPATH", "PYTHONHOME", "NODE_OPTIONS", "RUBYOPT", "PERL5OPT", "COMSPEC":
+			collector.add("execution-environment-injection", 70, "Process environment can inject code or alter interpreter startup")
+		}
+	}
+}
+
+func collectShellStdinSignals(arguments map[string]any, collector *signalCollector) {
+	rawBytes, exists := arguments["stdin_bytes"]
+	if !exists || numericZero(rawBytes) {
+		return
+	}
+	collector.add("process-stdin", 10, "Process receives caller-controlled standard input")
+	executable := executableName(firstString(arguments, "executable", "program", "binary"))
+	if isCommandConsumer(executable) {
+		collector.add("opaque-interpreter-input", 70, "A command interpreter receives opaque standard input")
+	}
+}
+
+func numericZero(value any) bool {
+	switch typed := value.(type) {
+	case int:
+		return typed == 0
+	case int64:
+		return typed == 0
+	case float64:
+		return typed == 0
+	case json.Number:
+		return typed.String() == "0"
+	default:
+		return false
+	}
 }
 
 func analyzeShellText(command string, collector *signalCollector, depth int) {

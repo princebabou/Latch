@@ -146,6 +146,52 @@ func TestShellSignalsAreDeduplicated(t *testing.T) {
 	}
 }
 
+func TestShellAdapterSnapshotSignals(t *testing.T) {
+	tests := []struct {
+		name      string
+		arguments map[string]any
+		want      []string
+	}{
+		{
+			name: "environment search path",
+			arguments: map[string]any{
+				"command":             []any{"/usr/bin/git", "status"},
+				"executable":          "/usr/bin/git",
+				"environment_changes": []any{map[string]any{"name": "PATH", "value_sha256": "abc"}},
+			},
+			want: []string{"process-environment-modification", "process-search-path-modification"},
+		},
+		{
+			name: "interpreter startup injection",
+			arguments: map[string]any{
+				"command":             []any{"/usr/bin/node", "app.js"},
+				"executable":          "/usr/bin/node",
+				"environment_changes": []any{map[string]any{"name": "NODE_OPTIONS", "value_sha256": "abc"}},
+			},
+			want: []string{"execution-environment-injection"},
+		},
+		{
+			name: "opaque interpreter stdin",
+			arguments: map[string]any{
+				"command": []any{"/bin/sh"}, "executable": "/bin/sh", "stdin_bytes": float64(20),
+				"environment_changes": []any{},
+			},
+			want: []string{"process-stdin", "opaque-interpreter-input"},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, signals := Analyze(models.Action{Tool: "shell.exec", Operation: "execute", Arguments: test.arguments})
+			names := riskSignalNames(signals)
+			for _, wanted := range test.want {
+				if !names[wanted] {
+					t.Fatalf("signals = %#v, want %q", signals, wanted)
+				}
+			}
+		})
+	}
+}
+
 func riskSignalNames(signals []models.RiskSignal) map[string]bool {
 	names := make(map[string]bool, len(signals))
 	for _, signal := range signals {

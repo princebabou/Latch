@@ -8,5 +8,5 @@
     "noEmit": true,
     "skipLibCheck": true
   },
-  "include": ["langchain-types.ts"]
+  "include": ["langchain-types.ts", "shell-types.ts"]
 }

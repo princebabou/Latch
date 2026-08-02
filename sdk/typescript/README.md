@@ -42,3 +42,21 @@ const toolNode = await createLatchToolNode(tools, latch);
 only when these factories are used. Middleware protects individual agent calls;
 the ToolNode preflights the complete parallel batch. Current LangChain v1
 releases require Node.js 20+; the base Latch client continues to support 18+.
+
+Protect a Node child process through the Node-only subpath export:
+
+```ts
+import { ShellExecutor } from "@latch-security/sdk/shell";
+
+const shell = new ShellExecutor(latch);
+const result = await shell.run({
+  executionId: "agent:git-status:001",
+  executable: "git",
+  args: ["status", "--short"],
+  cwd: workspace,
+});
+```
+
+`runShell` is a separate explicit method for shell syntax. Keeping it in the
+`/shell` export preserves the browser-safe base SDK while providing bounded,
+abortable, replay-resistant local execution on Node.js.

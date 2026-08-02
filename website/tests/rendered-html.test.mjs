@@ -43,6 +43,13 @@ test("server-renders documentation and playground routes", async () => {
   assert.match(docsHtml, /Quickstart/);
   assert.match(docsHtml, /latch init --profile balanced/);
 
+  const shellResponse = await render("/docs/shell-execution");
+  const shellHtml = await shellResponse.text();
+  assert.equal(shellResponse.status, 200);
+  assert.match(shellHtml, /Shell &amp; local processes/);
+  assert.match(shellHtml, /Fingerprint the executable/);
+  assert.match(shellHtml, /@latch-security\/sdk\/shell/);
+
   const playgroundResponse = await render("/playground");
   const playgroundHtml = await playgroundResponse.text();
   assert.equal(playgroundResponse.status, 200);

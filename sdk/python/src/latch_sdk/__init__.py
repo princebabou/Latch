@@ -19,6 +19,14 @@ from .openai import (
     OpenAIToolReplayError,
     UnknownOpenAIToolError,
 )
+from .shell import (
+    ShellExecutionError,
+    ShellExecutor,
+    ShellNotAllowedError,
+    ShellProtocolError,
+    ShellReplayError,
+    ShellResult,
+)
 
 __all__ = [
     "APIError",
@@ -39,5 +47,11 @@ __all__ = [
     "PolicyResult",
     "ProtocolError",
     "Risk",
+    "ShellExecutionError",
+    "ShellExecutor",
+    "ShellNotAllowedError",
+    "ShellProtocolError",
+    "ShellReplayError",
+    "ShellResult",
     "UnknownOpenAIToolError",
 ]

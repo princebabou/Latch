@@ -507,6 +507,94 @@ const graph = new StateGraph(MessagesAnnotation)
     ],
   },
   {
+    slug: "shell-execution",
+    group: "Integrate",
+    title: "Shell & local processes",
+    summary:
+      "Authorize an exact executable, argv, cwd, environment snapshot, and input before a bounded child process starts.",
+    readingTime: "10 min",
+    sections: [
+      {
+        id: "boundary",
+        title: "Put policy before process creation",
+        paragraphs: [
+          "Use the SDK executor instead of calling exec, subprocess, or spawn directly. Structured argv is the recommended boundary; shell text has a separate explicit method so shell parsing cannot be enabled accidentally.",
+        ],
+        bullets: [
+          "Resolve the executable and cwd to absolute real paths before asking Latch.",
+          "Fingerprint the executable and recheck it after ALLOW to catch replacement races.",
+          "Snapshot the exact child environment without leaking environment values into the action.",
+          "Consume the execution ID before process start and retain it after uncertain failure.",
+          "Bound stdin, stdout, stderr, and runtime on every allowed process.",
+        ],
+      },
+      {
+        id: "python",
+        title: "Python",
+        code: `from latch_sdk import LatchClient, ShellExecutor
+
+latch = LatchClient("http://127.0.0.1:7070", token="...")
+shell = ShellExecutor(latch)
+
+result = shell.run(
+    "agent:git-status:001",
+    "git",
+    ("status", "--short"),
+    cwd=workspace,
+    env={"CI": "true"},
+)
+print(result.stdout_text)`,
+        language: "python",
+      },
+      {
+        id: "typescript",
+        title: "TypeScript / Node.js",
+        code: `import { ShellExecutor } from "@latch-security/sdk/shell";
+
+const shell = new ShellExecutor(latch);
+const result = await shell.run({
+  executionId: "agent:git-status:001",
+  executable: "git",
+  args: ["status", "--short"],
+  cwd: workspace,
+  env: { CI: "true" },
+});`,
+        language: "typescript",
+        note: "The Node-only /shell export keeps the base TypeScript SDK safe for browser bundles.",
+      },
+      {
+        id: "shell-text",
+        title: "Make shell parsing intentional",
+        paragraphs: [
+          "Use run_shell in Python, RunShell in Go, or runShell in TypeScript only when pipes, redirects, expansion, or another shell feature is actually required. The complete shell text remains visible to policy and audit.",
+        ],
+        code: `result = shell.run_shell(
+    "agent:tests:001",
+    "python -m pytest | tee test.log",
+)`,
+        language: "python",
+      },
+      {
+        id: "privacy",
+        title: "Bind secrets without copying them",
+        bullets: [
+          "Environment values and stdin are represented by SHA-256 digest and byte length.",
+          "Environment variable names remain visible so PATH, NODE_OPTIONS, PYTHONPATH, LD_PRELOAD, COMSPEC, and similar injection surfaces can be escalated.",
+          "Opaque stdin sent to a command interpreter receives a high-risk signal.",
+          "Argv and explicit shell text remain visible because they are the code being authorized; do not place credentials in command-line arguments.",
+        ],
+      },
+      {
+        id: "limits",
+        title: "Enforcement is not sandboxing",
+        paragraphs: [
+          "An allowed process retains the filesystem, network, user identity, and kernel permissions of its parent. Combine Latch with containers, restricted service accounts, or operating-system sandbox controls when untrusted code needs containment.",
+        ],
+        note: "Defaults: 30-second runtime, 1 MiB stdin, 4 MiB stdout, 4 MiB stderr, and 10,000 process-local replay IDs.",
+      },
+    ],
+  },
+  {
     slug: "identities-budgets",
     group: "Configure",
     title: "Identities & budgets",
@@ -809,8 +897,8 @@ latch version [--json]`,
         id: "current-boundary",
         title: "Current boundary",
         paragraphs: [
-          "The current release secures MCP stdio, MCP Streamable HTTP, generic HTTP APIs, OpenAI-compatible function calls, LangChain agents, and LangGraph ToolNodes, with operator-bound identities, capability ceilings, cumulative budgets, exact local approvals, and structured shell, HTTP, SQL, and filesystem inspection.",
-          "Shell execution, CI/CD, cryptographic remote-agent identity, and centrally authenticated remote approvers remain follow-up priorities.",
+          "The current release secures MCP stdio, MCP Streamable HTTP, generic HTTP APIs, OpenAI-compatible function calls, LangChain agents, LangGraph ToolNodes, and fingerprint-bound local process execution, with operator-bound identities, capability ceilings, cumulative budgets, exact local approvals, and structured shell, HTTP, SQL, and filesystem inspection.",
+          "CI/CD, cryptographic remote-agent identity, and centrally authenticated remote approvers remain follow-up priorities.",
         ],
       },
       {

@@ -45,3 +45,21 @@ tool_node = LatchToolNode(tools, client)
 
 Middleware protects individual agent calls. `LatchToolNode` preflights the
 complete parallel LangGraph batch before any tool starts.
+
+Protect local process execution without another dependency:
+
+```python
+from latch_sdk import ShellExecutor
+
+shell = ShellExecutor(client)
+result = shell.run(
+    "agent:git-status:001",
+    "git",
+    ("status", "--short"),
+    cwd=workspace,
+)
+```
+
+`run_shell` is a separate explicit method for shell syntax. Executables are
+resolved, fingerprinted, approved, and rechecked before start; cwd,
+environment, input, replay, timeout, and output limits fail closed.
