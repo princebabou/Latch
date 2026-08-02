@@ -30,3 +30,15 @@ const outputs = await adapter.executeResponses(response);
 
 Every call in the batch must be valid, registered, and allowed before any
 handler runs. Duplicate call IDs are rejected to prevent repeated side effects.
+
+Add native LangChain middleware or a whole-batch protected LangGraph ToolNode:
+
+```ts
+const middleware = await createLatchAgentMiddleware(latch);
+const toolNode = await createLatchToolNode(tools, latch);
+```
+
+`langchain` and `@langchain/langgraph` are optional peer dependencies and load
+only when these factories are used. Middleware protects individual agent calls;
+the ToolNode preflights the complete parallel batch. Current LangChain v1
+releases require Node.js 20+; the base Latch client continues to support 18+.

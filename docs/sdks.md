@@ -14,6 +14,11 @@ Responses API and Chat Completions function calls with strict argument parsing,
 whole-batch authorization, local replay protection, and provider-native output
 objects. See the [OpenAI-compatible integration guide](openai-tool-calling.md).
 
+Python and TypeScript also include optional LangChain v1 middleware and
+protected LangGraph ToolNodes. The ToolNode adapters authorize a complete
+parallel batch before framework execution begins. See the
+[LangChain/LangGraph integration guide](langchain-langgraph.md).
+
 Start an authenticated local API before trying an SDK:
 
 ```sh

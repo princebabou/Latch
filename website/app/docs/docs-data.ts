@@ -449,6 +449,64 @@ const messages = await tools.executeChatCompletion(completion);`,
     ],
   },
   {
+    slug: "langchain-langgraph",
+    group: "Integrate",
+    title: "LangChain & LangGraph",
+    summary:
+      "Add native agent middleware or authorize an entire parallel ToolNode batch before any tool starts.",
+    readingTime: "9 min",
+    sections: [
+      {
+        id: "choose",
+        title: "Choose the enforcement boundary",
+        bullets: [
+          "Agent middleware is the smallest change for standard LangChain agents and protects each framework tool call.",
+          "The protected ToolNode is designed for custom LangGraph workflows and preflights every parallel call as one execution batch.",
+          "Both paths fail closed on malformed calls, unknown tools, replay, unavailable Latch, BLOCK, and REQUIRE_APPROVAL.",
+        ],
+      },
+      {
+        id: "python",
+        title: "Python",
+        code: `from latch_sdk.langchain import LatchAgentMiddleware, LatchToolNode
+
+agent = create_agent(
+    model=model,
+    tools=tools,
+    middleware=[LatchAgentMiddleware(latch)],
+)
+
+# Stronger whole-batch boundary for a custom graph
+tool_node = LatchToolNode(tools, latch)`,
+        language: "python",
+      },
+      {
+        id: "typescript",
+        title: "TypeScript",
+        code: `const middleware = await createLatchAgentMiddleware(latch);
+const toolNode = await createLatchToolNode(tools, latch);
+
+const graph = new StateGraph(MessagesAnnotation)
+  .addNode("tools", toolNode)
+  .addEdge(START, "tools")
+  .addEdge("tools", END)
+  .compile();`,
+        language: "typescript",
+      },
+      {
+        id: "security",
+        title: "Fail-closed graph execution",
+        bullets: [
+          "Arguments must be bounded, plain, interoperable JSON without cycles, accessors, ambiguous Unicode, or unsafe numbers.",
+          "Unknown tools and duplicate IDs are rejected before Latch or any tool is called.",
+          "Every ToolNode call must receive ALLOW before LangGraph begins parallel execution.",
+          "Call IDs remain consumed after tool failure to prevent uncertain side effects from being retried.",
+          "Injected graph state, stores, runtime context, and credentials are not copied into model-controlled action arguments.",
+        ],
+      },
+    ],
+  },
+  {
     slug: "identities-budgets",
     group: "Configure",
     title: "Identities & budgets",
@@ -751,8 +809,8 @@ latch version [--json]`,
         id: "current-boundary",
         title: "Current boundary",
         paragraphs: [
-          "The current release secures MCP stdio, MCP Streamable HTTP, generic HTTP APIs, and OpenAI-compatible Responses API and Chat Completions function calls, with operator-bound identities, capability ceilings, cumulative budgets, exact local approvals, and structured shell, HTTP, SQL, and filesystem inspection.",
-          "LangChain/LangGraph, shell execution, CI/CD, cryptographic remote-agent identity, and centrally authenticated remote approvers remain follow-up priorities.",
+          "The current release secures MCP stdio, MCP Streamable HTTP, generic HTTP APIs, OpenAI-compatible function calls, LangChain agents, and LangGraph ToolNodes, with operator-bound identities, capability ceilings, cumulative budgets, exact local approvals, and structured shell, HTTP, SQL, and filesystem inspection.",
+          "Shell execution, CI/CD, cryptographic remote-agent identity, and centrally authenticated remote approvers remain follow-up priorities.",
         ],
       },
       {

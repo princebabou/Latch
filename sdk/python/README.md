@@ -28,3 +28,20 @@ outputs = adapter.execute_responses(response)
 
 Every call in the batch must be valid, registered, and allowed before any
 handler runs. Duplicate call IDs are rejected to prevent repeated side effects.
+
+Install the optional LangChain/LangGraph integration and add its middleware or
+protected ToolNode:
+
+```sh
+python -m pip install "latch-sdk[langchain]"
+```
+
+```python
+from latch_sdk.langchain import LatchAgentMiddleware, LatchToolNode
+
+middleware = LatchAgentMiddleware(client)
+tool_node = LatchToolNode(tools, client)
+```
+
+Middleware protects individual agent calls. `LatchToolNode` preflights the
+complete parallel LangGraph batch before any tool starts.

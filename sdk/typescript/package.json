@@ -29,10 +29,26 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "npm run build && node --test tests/*.test.mjs",
+    "test": "npm run build && npm run test:types && node --test tests/*.test.mjs",
+    "test:types": "tsc -p tests/tsconfig.json",
     "prepack": "npm run build"
   },
   "devDependencies": {
-    "typescript": "5.9.3"
+    "@langchain/langgraph": "1.4.7",
+    "langchain": "1.5.2",
+    "typescript": "5.9.3",
+    "zod": "4.4.3"
+  },
+  "peerDependencies": {
+    "@langchain/langgraph": ">=1.4.0 <2",
+    "langchain": ">=1.5.0 <2"
+  },
+  "peerDependenciesMeta": {
+    "@langchain/langgraph": {
+      "optional": true
+    },
+    "langchain": {
+      "optional": true
+    }
   }
 }

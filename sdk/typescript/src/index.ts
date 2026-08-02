@@ -417,3 +417,4 @@ function errorMessage(value: unknown): string {
 }
 
 export * from "./openai.js";
+export * from "./langchain.js";

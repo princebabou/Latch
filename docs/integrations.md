@@ -1,6 +1,6 @@
 # Integrating Latch
 
-Latch has six stable integration surfaces:
+Latch has seven stable integration surfaces:
 
 1. `latch proxy` is a transparent security boundary for local MCP stdio
    servers.
@@ -10,9 +10,11 @@ Latch has six stable integration surfaces:
    service or the calling tool's request format.
 4. The OpenAI-compatible function adapter protects completed Responses API and
    Chat Completions tool calls before registered handlers run.
-5. The versioned Enforcement API and official SDKs embed Latch into existing
+5. Native LangChain middleware and protected LangGraph ToolNodes cover standard
+   agents and whole parallel tool batches.
+6. The versioned Enforcement API and official SDKs embed Latch into existing
    Go, Python, and TypeScript tool runners.
-6. `latch check` is a protocol-neutral policy gate for scripts, CI jobs,
+7. `latch check` is a protocol-neutral policy gate for scripts, CI jobs,
    orchestrators, and tool wrappers.
 
 ## Three-command MCP setup
@@ -142,6 +144,24 @@ Malformed arguments, duplicate JSON keys, unknown tools, replays, non-allow
 decisions, and Latch failures prevent every handler in the batch from starting.
 See [OpenAI-compatible tool calling](openai-tool-calling.md) for Responses API,
 Chat Completions, Go, Python, and TypeScript examples.
+
+## LangChain and LangGraph
+
+Use `LatchAgentMiddleware` or `createLatchAgentMiddleware` with standard
+LangChain agents. For custom LangGraph workflows, replace the ordinary
+`ToolNode` with `LatchToolNode` or `createLatchToolNode` so every call in a
+parallel batch is allowed before any tool starts.
+
+```python
+from latch_sdk.langchain import LatchAgentMiddleware, LatchToolNode
+
+agent = create_agent(model=model, tools=tools, middleware=[LatchAgentMiddleware(latch)])
+tool_node = LatchToolNode(tools, latch)
+```
+
+See [LangChain and LangGraph](langchain-langgraph.md) for installation, Python
+and TypeScript examples, middleware composition, batch behavior, and security
+bounds.
 
 ## Trust binding
 

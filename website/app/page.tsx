@@ -27,6 +27,7 @@ const integrations = [
   ["HTTP / API", "Drop-in reverse enforcement gateway"],
   ["MCP HTTP", "Streamable HTTP and SSE protection"],
   ["OpenAI tools", "Responses and Chat Completions guards"],
+  ["LangGraph", "Whole-batch protected ToolNode"],
   ["Claude Desktop", "Native launcher configuration"],
   ["Cursor", "Project-level MCP protection"],
   ["VS Code", "Generated stdio server registration"],

@@ -23,6 +23,12 @@ Homepage = "https://github.com/princebabou/Latch"
 Repository = "https://github.com/princebabou/Latch"
 Documentation = "https://github.com/princebabou/Latch/blob/main/docs/sdks.md"
 
+[project.optional-dependencies]
+langchain = [
+  "langchain>=1.3,<2",
+  "langgraph>=1.0,<2",
+]
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
