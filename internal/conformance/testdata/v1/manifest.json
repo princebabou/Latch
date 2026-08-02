@@ -1,0 +1,186 @@
+{
+  "schema_version": "latch.conformance/v1",
+  "suite_version": "1.0.0",
+  "decision_cases": [
+    {
+      "id": "decision.allow_baseline",
+      "description": "A low-risk request with no matching restrictive policy is explicitly allowed.",
+      "action": {
+        "tool": "http.request",
+        "arguments": {
+          "method": "GET",
+          "url": "https://api.example.test/status"
+        }
+      },
+      "expected": {
+        "decision": "ALLOW",
+        "decision_source": "default_allow",
+        "forwarded": true
+      }
+    },
+    {
+      "id": "decision.policy_block",
+      "description": "An explicit block policy prevents forwarding.",
+      "action": {
+        "tool": "http.request",
+        "arguments": {
+          "method": "DELETE",
+          "url": "https://api.example.test/forbidden/records"
+        }
+      },
+      "expected": {
+        "decision": "BLOCK",
+        "decision_source": "policy_block",
+        "forwarded": false,
+        "triggered_rules": ["block-forbidden"]
+      }
+    },
+    {
+      "id": "decision.require_approval",
+      "description": "An approval-gated request never forwards without an active exact grant.",
+      "action": {
+        "tool": "http.request",
+        "arguments": {
+          "method": "POST",
+          "url": "https://api.example.test/deploy",
+          "body": {"version": "1.2.3"}
+        }
+      },
+      "expected": {
+        "decision": "REQUIRE_APPROVAL",
+        "decision_source": "policy_approval",
+        "forwarded": false,
+        "triggered_rules": ["approve-deploy"]
+      }
+    },
+    {
+      "id": "decision.policy_conflict",
+      "description": "BLOCK wins when block, approval, and allow rules all match the same action.",
+      "action": {
+        "tool": "http.request",
+        "arguments": {
+          "method": "DELETE",
+          "url": "https://api.example.test/conflict/release"
+        }
+      },
+      "expected": {
+        "decision": "BLOCK",
+        "decision_source": "policy_block",
+        "forwarded": false,
+        "triggered_rules": ["block-conflict", "approve-conflict", "allow-conflict"]
+      }
+    },
+    {
+      "id": "decision.hard_deny_bypass",
+      "description": "An ordinary allow rule cannot bypass secret-bearing outbound data detection.",
+      "action": {
+        "tool": "http.request",
+        "arguments": {
+          "method": "POST",
+          "url": "https://api.example.test/collect",
+          "body": {"refresh_token": "conformance-placeholder"}
+        }
+      },
+      "expected": {
+        "decision": "BLOCK",
+        "decision_source": "hard_deny",
+        "forwarded": false,
+        "hard_deny": true,
+        "triggered_rules": ["ordinary-allow-collector"]
+      }
+    },
+    {
+      "id": "decision.expired_approval",
+      "description": "An expired exact grant does not turn REQUIRE_APPROVAL into ALLOW.",
+      "setup": "expired_approval",
+      "action": {
+        "tool": "http.request",
+        "arguments": {
+          "method": "POST",
+          "url": "https://api.example.test/deploy",
+          "body": {"version": "1.2.3"}
+        }
+      },
+      "expected": {
+        "decision": "REQUIRE_APPROVAL",
+        "decision_source": "policy_approval",
+        "forwarded": false,
+        "triggered_rules": ["approve-deploy"]
+      }
+    },
+    {
+      "id": "decision.audit_fail_closed",
+      "description": "A required audit failure converts an otherwise allowed request into a fail-closed block.",
+      "setup": "audit_unavailable",
+      "action": {
+        "tool": "http.request",
+        "arguments": {
+          "method": "GET",
+          "url": "https://api.example.test/status"
+        }
+      },
+      "expected": {
+        "decision": "BLOCK",
+        "decision_source": "audit_failure",
+        "forwarded": false,
+        "fail_closed": true
+      }
+    }
+  ],
+  "wire_cases": [
+    {
+      "id": "wire.malformed_json",
+      "description": "Malformed JSON is rejected before policy evaluation.",
+      "payload": "{\"api_version\":",
+      "expected_status": 400,
+      "expected_error": "invalid_json"
+    },
+    {
+      "id": "wire.duplicate_keys",
+      "description": "Duplicate object keys are rejected at every nesting level.",
+      "payload": "{\"api_version\":\"latch.security/v1\",\"request_id\":\"req_duplicate1\",\"action\":{\"tool\":\"http.request\",\"tool\":\"safe.tool\"}}",
+      "expected_status": 400,
+      "expected_error": "invalid_json"
+    },
+    {
+      "id": "wire.unknown_fields",
+      "description": "Unknown contract fields cannot smuggle trusted state into a request.",
+      "payload": "{\"api_version\":\"latch.security/v1\",\"request_id\":\"req_unknown01\",\"action\":{\"tool\":\"http.request\"},\"trusted\":true}",
+      "expected_status": 400,
+      "expected_error": "invalid_json"
+    },
+    {
+      "id": "wire.trailing_value",
+      "description": "A valid object followed by another JSON value is rejected.",
+      "payload": "{\"api_version\":\"latch.security/v1\",\"request_id\":\"req_trailing1\",\"action\":{\"tool\":\"http.request\"}} true",
+      "expected_status": 400,
+      "expected_error": "invalid_json"
+    },
+    {
+      "id": "wire.replayed_request",
+      "description": "Reusing a claimed request ID is rejected rather than replaying an ALLOW.",
+      "setup": "replay",
+      "expected_status": 409,
+      "expected_error": "replayed_request"
+    },
+    {
+      "id": "wire.oversized_request",
+      "description": "A request over the configured body limit is rejected before parsing.",
+      "setup": "oversized",
+      "expected_status": 413,
+      "expected_error": "request_too_large"
+    }
+  ],
+  "client_cases": [
+    {"id": "client.allow", "response": "allow", "execute": true},
+    {"id": "client.block", "response": "block", "execute": false},
+    {"id": "client.require_approval", "response": "require_approval", "execute": false},
+    {"id": "client.unknown_decision", "response": "unknown_decision", "execute": false},
+    {"id": "client.version_mismatch", "response": "version_mismatch", "execute": false},
+    {"id": "client.request_id_mismatch", "response": "request_id_mismatch", "execute": false},
+    {"id": "client.malformed_response", "response": "malformed", "execute": false},
+    {"id": "client.oversized_response", "response": "oversized", "execute": false},
+    {"id": "client.redirect", "response": "redirect", "execute": false},
+    {"id": "client.unavailable", "response": "unavailable", "execute": false}
+  ]
+}

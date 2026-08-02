@@ -13,6 +13,18 @@ import (
 // keys are rejected at every depth so a policy engine and an upstream service
 // cannot disagree about which value is authoritative.
 func Decode(payload []byte, target any) error {
+	return decode(payload, target, false)
+}
+
+// DecodeDisallowUnknown parses exactly one unambiguous JSON value and rejects
+// fields that are not present in the destination type. It is intended for
+// versioned security contracts where silently ignoring a field could create a
+// different interpretation across implementations.
+func DecodeDisallowUnknown(payload []byte, target any) error {
+	return decode(payload, target, true)
+}
+
+func decode(payload []byte, target any, disallowUnknown bool) error {
 	if !utf8.Valid(payload) {
 		return fmt.Errorf("JSON is not valid UTF-8")
 	}
@@ -21,6 +33,9 @@ func Decode(payload []byte, target any) error {
 	}
 	decoder := json.NewDecoder(bytes.NewReader(payload))
 	decoder.UseNumber()
+	if disallowUnknown {
+		decoder.DisallowUnknownFields()
+	}
 	if err := decoder.Decode(target); err != nil {
 		return err
 	}

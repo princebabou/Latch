@@ -21,6 +21,11 @@ Latch has nine stable integration surfaces:
 9. `latch check` is a protocol-neutral policy evaluator for scripts,
    orchestrators, and tool wrappers.
 
+Every integration is tested against a versioned security corpus. Run
+`latch conformance` for the built-in boundaries and see
+[Conformance and security testing](conformance.md) for the certification matrix,
+SDK profile, and rules for adding an adapter.
+
 ## Three-command MCP setup
 
 Create a production-oriented policy, verify it, and generate a native client

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import http from "node:http";
 import test from "node:test";
 
@@ -46,6 +47,11 @@ function json(response, value, status = 200) {
   response.end(body);
 }
 
+const conformanceManifest = JSON.parse(readFileSync(
+  new URL("../../../internal/conformance/testdata/v1/manifest.json", import.meta.url),
+  "utf8",
+));
+
 test("decide sends the authenticated v1 contract", async () => {
   await withServer(async (request, response) => {
     assert.equal(request.url, "/v1/decisions");
@@ -77,6 +83,61 @@ test("guard executes only an explicit ALLOW", async () => {
         );
       }
       assert.equal(executed, outcome === "ALLOW");
+    });
+  }
+});
+
+test("client satisfies the latch.conformance/v1 corpus", async (t) => {
+  assert.ok(conformanceManifest.client_cases.length > 0);
+  for (const testCase of conformanceManifest.client_cases) {
+    await t.test(testCase.id, async () => {
+      let executed = false;
+      const run = async (url) => {
+        let failed = false;
+        try {
+          await new LatchClient(url, { timeoutMs: 100, maxResponseBytes: 1024 }).guard(
+            { tool: "conformance.tool" },
+            () => { executed = true; },
+          );
+        } catch {
+          failed = true;
+        }
+        assert.equal(executed, testCase.execute);
+        assert.equal(failed, !testCase.execute);
+      };
+
+      if (testCase.response === "unavailable") {
+        await run("http://127.0.0.1:1");
+        return;
+      }
+
+      await withServer(async (request, response) => {
+        const body = await requestBody(request);
+        if (testCase.response === "malformed") {
+          response.writeHead(200, { "content-type": MEDIA_TYPE });
+          response.end("not-json");
+          return;
+        }
+        if (testCase.response === "oversized") {
+          const oversized = "x".repeat(2048);
+          response.writeHead(200, { "content-type": MEDIA_TYPE, "content-length": Buffer.byteLength(oversized) });
+          response.end(oversized);
+          return;
+        }
+        if (testCase.response === "redirect") {
+          response.writeHead(307, { location: "https://example.invalid" });
+          response.end();
+          return;
+        }
+
+        const payload = decision(body.request_id);
+        if (testCase.response === "block") payload.decision = "BLOCK";
+        else if (testCase.response === "require_approval") payload.decision = "REQUIRE_APPROVAL";
+        else if (testCase.response === "unknown_decision") payload.decision = "UNKNOWN";
+        else if (testCase.response === "version_mismatch") payload.api_version = "latch.security/v999";
+        else if (testCase.response === "request_id_mismatch") payload.request_id = "req_wrong000";
+        json(response, payload);
+      }, run);
     });
   }
 });

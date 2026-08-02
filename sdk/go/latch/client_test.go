@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
+	"runtime"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -14,6 +16,34 @@ import (
 	api "github.com/princebabou/Latch/pkg/api/v1"
 	"github.com/princebabou/Latch/pkg/models"
 )
+
+type conformanceClientCase struct {
+	ID       string `json:"id"`
+	Response string `json:"response"`
+	Execute  bool   `json:"execute"`
+}
+
+func loadClientConformanceCases(t *testing.T) []conformanceClientCase {
+	t.Helper()
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("locate conformance manifest")
+	}
+	payload, err := os.ReadFile(filepath.Join(filepath.Dir(filename), "..", "..", "..", "internal", "conformance", "testdata", "v1", "manifest.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var manifest struct {
+		ClientCases []conformanceClientCase `json:"client_cases"`
+	}
+	if err := json.Unmarshal(payload, &manifest); err != nil {
+		t.Fatal(err)
+	}
+	if len(manifest.ClientCases) == 0 {
+		t.Fatal("conformance manifest has no client cases")
+	}
+	return manifest.ClientCases
+}
 
 func TestClientDecideSendsV1ContractAndAuthenticates(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
@@ -64,6 +94,75 @@ func TestGuardExecutesOnlyExplicitAllow(t *testing.T) {
 			}
 			if !IsNotAllowed(err) || executed.Load() {
 				t.Fatalf("decision = %s, error = %v, executed = %t", decision, err, executed.Load())
+			}
+		})
+	}
+}
+
+func TestClientConformanceV1(t *testing.T) {
+	for _, testCase := range loadClientConformanceCases(t) {
+		t.Run(testCase.ID, func(t *testing.T) {
+			baseURL := "http://127.0.0.1:1"
+			var server *httptest.Server
+			if testCase.Response != "unavailable" {
+				server = httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+					var input api.DecisionRequest
+					if err := json.NewDecoder(request.Body).Decode(&input); err != nil {
+						t.Fatal(err)
+					}
+					response.Header().Set("Content-Type", api.MediaType)
+					switch testCase.Response {
+					case "malformed":
+						_, _ = response.Write([]byte("not-json"))
+						return
+					case "oversized":
+						_, _ = response.Write(make([]byte, 2048))
+						return
+					case "redirect":
+						response.Header().Set("Location", "https://example.invalid")
+						response.WriteHeader(http.StatusTemporaryRedirect)
+						return
+					}
+					result := api.DecisionResponse{
+						APIVersion: api.APIVersion, RequestID: input.RequestID, Decision: models.DecisionAllow,
+						Risk: api.Risk{Score: 0, Level: "LOW"}, Identity: api.Identity{Verified: true},
+						Policy: api.PolicyResult{DecisionSource: "conformance"},
+					}
+					switch testCase.Response {
+					case "block":
+						result.Decision = models.DecisionBlock
+					case "require_approval":
+						result.Decision = models.DecisionRequireApproval
+					case "unknown_decision":
+						result.Decision = models.Decision("UNKNOWN")
+					case "version_mismatch":
+						result.APIVersion = "latch.security/v999"
+					case "request_id_mismatch":
+						result.RequestID = "req_wrong000"
+					}
+					_ = json.NewEncoder(response).Encode(result)
+				}))
+				defer server.Close()
+				baseURL = server.URL
+			}
+
+			client, err := New(baseURL, WithTimeout(100*time.Millisecond), WithMaxResponseBytes(1024))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var executed atomic.Bool
+			_, err = client.Guard(context.Background(), api.Action{Tool: "conformance.tool"}, func(context.Context) error {
+				executed.Store(true)
+				return nil
+			})
+			if executed.Load() != testCase.Execute {
+				t.Fatalf("execute = %t, want %t", executed.Load(), testCase.Execute)
+			}
+			if testCase.Execute && err != nil {
+				t.Fatalf("allowed case failed: %v", err)
+			}
+			if !testCase.Execute && err == nil {
+				t.Fatal("fail-closed case did not return an error")
 			}
 		})
 	}

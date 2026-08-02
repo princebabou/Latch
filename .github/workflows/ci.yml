@@ -11,6 +11,18 @@ permissions:
   contents: read
 
 jobs:
+  conformance:
+    name: Security conformance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: 1.24.13
+          cache: true
+      - name: Certify built-in enforcement boundaries
+        run: go run ./cmd/latch conformance --json
+
   test:
     name: Test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}

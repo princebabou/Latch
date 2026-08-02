@@ -39,6 +39,8 @@ func run(args []string, in io.Reader, out, errOut io.Writer) int {
 		return check(args[1:], in, out, errOut)
 	case "ci":
 		return ciGate(args[1:], out, errOut)
+	case "conformance":
+		return conformanceCommand(args[1:], out, errOut)
 	case "run":
 		return runFile(args[1:], out, errOut)
 	case "proxy":
@@ -85,6 +87,7 @@ Usage:
   latch integrations http [--url http://127.0.0.1:7072] [options]
   latch check --tool <name> [--arg key=value] [options]
   latch ci --agent <trusted-id> --tool <name> [--arguments-json '{}'] [options]
+  latch conformance [--json|--manifest]
   latch proxy [options] -- <mcp-server-command> [args...]
   latch proxy-http --upstream <https://server/mcp> [options]
   latch proxy-api --upstream <https://api.example> [options]
@@ -105,6 +108,7 @@ Examples:
   latch check --tool filesystem.read --arg path=~/.ssh/id_rsa
   latch check --tool shell.exec --arg "command=npm test" --interactive
   latch ci --agent github-actions --tool deployment.apply --arg environment=production
+  latch conformance --json
   latch proxy --agent claude-desktop -- ./my-mcp-server
   latch proxy-http --upstream https://tools.example/mcp --agent remote-agent
   latch proxy-api --upstream https://api.example/v1 --agent api-agent

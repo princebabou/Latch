@@ -57,6 +57,13 @@ test("server-renders documentation and playground routes", async () => {
   assert.match(ciHtml, /princebabou\/Latch@v0\.2\.0/);
   assert.match(ciHtml, /allowed == &#x27;true&#x27;/);
 
+  const conformanceResponse = await render("/docs/conformance");
+  const conformanceHtml = await conformanceResponse.text();
+  assert.equal(conformanceResponse.status, 200);
+  assert.match(conformanceHtml, /Conformance &amp; security testing/);
+  assert.match(conformanceHtml, /41\/41 checks/);
+  assert.match(conformanceHtml, /latch conformance --json/);
+
   const playgroundResponse = await render("/playground");
   const playgroundHtml = await playgroundResponse.text();
   assert.equal(playgroundResponse.status, 200);

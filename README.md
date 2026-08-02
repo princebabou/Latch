@@ -86,6 +86,8 @@ valid, request-correlated `ALLOW`.
 See [integration recipes](docs/integrations.md) and the
 [deployment guide](docs/deployment.md) for client destinations, CI gates,
 containers, packages, provenance verification, and service hardening.
+Run `latch conformance` to certify the built-in boundaries against the
+versioned security corpus; see the [conformance guide](docs/conformance.md).
 
 `latch check` exits `0` only for an allowed action and exits `3` for a blocked or pending-approval action, which makes it friendly to CI and wrappers.
 
@@ -446,14 +448,17 @@ OpenAI-compatible Responses API and Chat Completions function calls, alongside
 native LangChain middleware, protected LangGraph ToolNodes, fail-closed local
 process execution, a native CI adapter, packaged GitHub Action, reusable policy
 workflow, the stable Enforcement API, and official Go, Python, and TypeScript
-SDKs. The conformance suite remains the next v0.2 milestone, followed by the policy playground,
-observability, and reference deployments.
+SDKs. A versioned cross-adapter conformance suite now certifies the decision,
+wire, and fail-closed client boundaries in CI. The interactive policy
+playground is the next v0.2 milestone, followed by observability and reference
+deployments.
 
 Run the suite with:
 
 ```sh
 go test ./...
 go vet ./...
+latch conformance
 ```
 
 `make verify` is the equivalent shortcut where Make is available.

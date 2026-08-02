@@ -4,6 +4,7 @@ import threading
 import unittest
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from typing import Any, Callable, Iterator
 
 from latch_sdk import (
@@ -98,6 +99,69 @@ class LatchClientTests(unittest.TestCase):
                         with self.assertRaises(NotAllowedError):
                             client.guard(Action("unsafe.tool"), lambda: executed.append(True))
                 self.assertEqual(bool(executed), outcome == "ALLOW")
+
+    def test_client_conformance_v1(self) -> None:
+        manifest_path = Path(__file__).resolve().parents[3] / "internal" / "conformance" / "testdata" / "v1" / "manifest.json"
+        cases = json.loads(manifest_path.read_text(encoding="utf-8"))["client_cases"]
+        self.assertTrue(cases)
+        for case in cases:
+            with self.subTest(case=case["id"]):
+                executed = []
+
+                def run(url: str) -> None:
+                    client = LatchClient(url, timeout=0.1, max_response_bytes=1024)
+                    try:
+                        client.guard(Action("conformance.tool"), lambda: executed.append(True))
+                        failed = False
+                    except (APIError, LatchUnavailable, NotAllowedError, ProtocolError):
+                        failed = True
+                    self.assertEqual(bool(executed), case["execute"])
+                    self.assertEqual(failed, not case["execute"])
+
+                if case["response"] == "unavailable":
+                    run("http://127.0.0.1:1")
+                    continue
+
+                def callback(handler: BaseHTTPRequestHandler, response_kind: str = case["response"]) -> None:
+                    size = int(handler.headers["Content-Length"])
+                    request = json.loads(handler.rfile.read(size))
+                    if response_kind == "malformed":
+                        body = b"not-json"
+                        handler.send_response(200)
+                        handler.send_header("Content-Type", MEDIA_TYPE)
+                        handler.send_header("Content-Length", str(len(body)))
+                        handler.end_headers()
+                        handler.wfile.write(body)
+                        return
+                    if response_kind == "oversized":
+                        body = b"x" * 2048
+                        handler.send_response(200)
+                        handler.send_header("Content-Type", MEDIA_TYPE)
+                        handler.send_header("Content-Length", str(len(body)))
+                        handler.end_headers()
+                        handler.wfile.write(body)
+                        return
+                    if response_kind == "redirect":
+                        handler.send_response(307)
+                        handler.send_header("Location", "https://example.invalid")
+                        handler.end_headers()
+                        return
+
+                    payload = decision_payload(request["request_id"])
+                    if response_kind == "block":
+                        payload["decision"] = "BLOCK"
+                    elif response_kind == "require_approval":
+                        payload["decision"] = "REQUIRE_APPROVAL"
+                    elif response_kind == "unknown_decision":
+                        payload["decision"] = "UNKNOWN"
+                    elif response_kind == "version_mismatch":
+                        payload["api_version"] = "latch.security/v999"
+                    elif response_kind == "request_id_mismatch":
+                        payload["request_id"] = "req_wrong000"
+                    send_json(handler, payload)
+
+                with test_server(callback) as url:
+                    run(url)
 
     def test_http_error_and_unavailable_fail_closed(self) -> None:
         def callback(handler: BaseHTTPRequestHandler) -> None:

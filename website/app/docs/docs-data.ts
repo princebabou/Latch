@@ -910,6 +910,81 @@ LATCH_AUDIT_TERMINAL=true`,
     ],
   },
   {
+    slug: "conformance",
+    group: "Operate",
+    title: "Conformance & security testing",
+    summary:
+      "Certify enforcement boundaries and SDK clients against one versioned fail-closed security corpus.",
+    readingTime: "8 min",
+    sections: [
+      {
+        id: "run",
+        title: "One command, 41 security checks",
+        paragraphs: [
+          "The built-in runner certifies the decision core, Enforcement API, MCP stdio, MCP Streamable HTTP, and generic HTTP gateway without starting an external service or executing a real tool.",
+          "It exits successfully only when every requirement passes, which makes the report safe to use as a required CI gate.",
+        ],
+        code: `latch conformance
+
+# Machine-readable certification report
+latch conformance --json
+
+# Exact embedded requirement manifest
+latch conformance --manifest`,
+        note: "A passing built-in run reports 41/41 checks. The complete run is offline, isolated, and bounded by a configurable timeout.",
+      },
+      {
+        id: "profiles",
+        title: "Three certification profiles",
+        bullets: [
+          "Decision — allow, explicit block, unresolved approval, block-wins conflicts, hard-deny bypass resistance, approval expiry, and required-audit failure.",
+          "Wire — malformed JSON, nested duplicate keys, unknown fields, trailing values, replayed request IDs, and oversized request bodies.",
+          "Client — only a correlated, version-compatible ALLOW executes; every denial, invalid response, redirect, and outage fails closed.",
+        ],
+      },
+      {
+        id: "matrix",
+        title: "Certification matrix",
+        bullets: [
+          "Decision core — 7 decision requirements",
+          "Enforcement API — 7 decision and 6 wire requirements",
+          "MCP stdio — 7 decision requirements",
+          "MCP Streamable HTTP — 7 decision requirements",
+          "Generic HTTP/API gateway — 7 decision requirements",
+          "Go, Python, and TypeScript SDKs — the same 10 fail-closed client requirements in each language",
+        ],
+      },
+      {
+        id: "contract",
+        title: "Versioned and portable",
+        paragraphs: [
+          "The canonical manifest uses the schema identifier latch.conformance/v1. Stable case IDs let CI systems compare reports without parsing human output.",
+          "Breaking requirement changes require a new schema version. Compatible requirements may extend the suite version, so adapter claims remain reviewable over time.",
+        ],
+      },
+      {
+        id: "meaning",
+        title: "What a passing result means",
+        paragraphs: [
+          "Certification proves behavior at the Latch boundary. It cannot protect a deployment where an agent can still reach the real tool directly.",
+          "Keep upstream credentials and trusted identity outside agent control, place Latch on the only path to the side effect, and test environment-specific TLS, isolation, and sandboxing separately.",
+        ],
+      },
+      {
+        id: "adapter",
+        title: "Certify a new adapter",
+        bullets: [
+          "Map the complete intended action into the stable Enforcement API model.",
+          "Run the applicable manifest profile without changing expected outcomes.",
+          "Prove that side-effect callbacks and upstream forwarding stay at zero for every non-allow and error case.",
+          "Add boundary-specific replay, mutation, partial-batch, and transport tests.",
+          "Make certification required in CI and publish a machine-readable failure report.",
+        ],
+        note: "REQUIRE_APPROVAL is never success. Old ALLOW decisions are never reusable, and Latch adapters do not provide a fail-open mode.",
+      },
+    ],
+  },
+  {
     slug: "cli-reference",
     group: "Reference",
     title: "CLI reference",
@@ -927,6 +1002,7 @@ latch integrations mcp-http --client <claude-code|cursor|vscode|generic>
 latch integrations http [--url http://127.0.0.1:7072]
 latch check --tool <name> [--arg key=value] [options]
 latch ci --agent <trusted-id> --tool <name> [options]
+latch conformance [--json|--manifest] [--timeout 30s]
 latch proxy [options] -- <mcp-server-command> [args...]
 latch proxy-http --upstream <https://server/mcp> [options]
 latch proxy-api --upstream <https://api.example> [options]
@@ -967,6 +1043,14 @@ latch version [--json]`,
   --action write \\
   --arguments-json '{"environment":"production"}' \\
   --json`,
+      },
+      {
+        id: "conformance",
+        title: "conformance",
+        paragraphs: [
+          "Run the embedded offline security corpus across built-in boundaries. Use --json for CI, --manifest to inspect exact requirements, and --timeout to bound the run. Exit 0 means every check passed; exit 1 means at least one security requirement failed.",
+        ],
+        code: `latch conformance --json`,
       },
       {
         id: "proxy",
@@ -1035,7 +1119,7 @@ latch version [--json]`,
         title: "Current boundary",
         paragraphs: [
           "The v0.2 preview secures MCP stdio, MCP Streamable HTTP, generic HTTP APIs, OpenAI-compatible function calls, LangChain agents, LangGraph ToolNodes, fingerprint-bound local process execution, and CI/CD gates with native GitHub Actions reporting.",
-          "Cryptographic remote-agent identity, centrally authenticated remote approvers, the cross-adapter conformance suite, policy playground, and observability remain follow-up priorities.",
+          "A versioned conformance suite now certifies decision, wire, and fail-closed SDK client behavior in CI. Cryptographic remote-agent identity, centrally authenticated remote approvers, the interactive policy playground, and observability remain follow-up priorities.",
         ],
       },
       {

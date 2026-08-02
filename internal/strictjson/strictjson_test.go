@@ -24,3 +24,15 @@ func TestDecodeAcceptsOneJSONValue(t *testing.T) {
 		t.Fatalf("Decode() error = %v", err)
 	}
 }
+
+func TestDecodeDisallowUnknownRejectsContractSmuggling(t *testing.T) {
+	var value struct {
+		Safe bool `json:"safe"`
+	}
+	if err := DecodeDisallowUnknown([]byte(`{"safe":true,"trusted":true}`), &value); err == nil {
+		t.Fatal("unknown contract field was accepted")
+	}
+	if err := DecodeDisallowUnknown([]byte(`{"safe":true}`), &value); err != nil || !value.Safe {
+		t.Fatalf("valid strict contract error = %v, value = %#v", err, value)
+	}
+}

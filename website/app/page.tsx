@@ -33,6 +33,7 @@ const integrations = [
   ["Cursor", "Project-level MCP protection"],
   ["VS Code", "Generated stdio server registration"],
   ["CI / CD", "Native GitHub Action, summaries, and outputs"],
+  ["Certified adapters", "Versioned cross-adapter security corpus"],
   ["Any tool wrapper", "Protocol-neutral check contract"],
 ];
 

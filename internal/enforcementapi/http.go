@@ -17,6 +17,7 @@ import (
 	"github.com/princebabou/Latch/internal/audit"
 	"github.com/princebabou/Latch/internal/decision"
 	"github.com/princebabou/Latch/internal/normalize"
+	"github.com/princebabou/Latch/internal/strictjson"
 	api "github.com/princebabou/Latch/pkg/api/v1"
 	"github.com/princebabou/Latch/pkg/models"
 )
@@ -159,25 +160,19 @@ func (h *Handler) ServeHTTP(response http.ResponseWriter, request *http.Request)
 	}
 
 	request.Body = http.MaxBytesReader(response, request.Body, h.maxBodyBytes)
-	var input api.DecisionRequest
-	decoder := json.NewDecoder(request.Body)
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&input); err != nil {
+	payload, err := io.ReadAll(request.Body)
+	if err != nil {
 		var tooLarge *http.MaxBytesError
 		if errors.As(err, &tooLarge) {
 			h.writeError(response, http.StatusRequestEntityTooLarge, "request_too_large", "request body exceeds the configured limit", "")
 			return
 		}
-		h.writeError(response, http.StatusBadRequest, "invalid_json", "request body must be one valid JSON object using only v1 fields", "")
+		h.writeError(response, http.StatusBadRequest, "invalid_json", "request body could not be read safely", "")
 		return
 	}
-	if err := ensureJSONEnd(decoder); err != nil {
-		var tooLarge *http.MaxBytesError
-		if errors.As(err, &tooLarge) {
-			h.writeError(response, http.StatusRequestEntityTooLarge, "request_too_large", "request body exceeds the configured limit", input.RequestID)
-			return
-		}
-		h.writeError(response, http.StatusBadRequest, "invalid_json", "request body must contain exactly one JSON object", input.RequestID)
+	var input api.DecisionRequest
+	if err := strictjson.DecodeDisallowUnknown(payload, &input); err != nil {
+		h.writeError(response, http.StatusBadRequest, "invalid_json", "request body must be one valid JSON object using only v1 fields", "")
 		return
 	}
 	if err := input.Validate(); err != nil {
@@ -248,18 +243,6 @@ func (h *Handler) writeJSON(response http.ResponseWriter, status int, value any)
 	response.Header().Set("Content-Type", api.MediaType)
 	response.WriteHeader(status)
 	_ = json.NewEncoder(response).Encode(value)
-}
-
-func ensureJSONEnd(decoder *json.Decoder) error {
-	var extra any
-	err := decoder.Decode(&extra)
-	if errors.Is(err, io.EOF) {
-		return nil
-	}
-	if err == nil {
-		return fmt.Errorf("extra JSON value")
-	}
-	return err
 }
 
 func cloneMap(input map[string]any) map[string]any {
