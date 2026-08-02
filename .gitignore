@@ -3,6 +3,7 @@
 .latch/
 bin/
 dist/
+node_modules/
 
 coverage.out
 *.coverprofile

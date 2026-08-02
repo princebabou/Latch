@@ -393,6 +393,62 @@ curl http://127.0.0.1:7072/customers/42 \\
     ],
   },
   {
+    slug: "openai-tools",
+    group: "Integrate",
+    title: "OpenAI-compatible tools",
+    summary:
+      "Protect Responses API and Chat Completions function calls with whole-batch authorization and replay defense.",
+    readingTime: "8 min",
+    sections: [
+      {
+        id: "python",
+        title: "Add the adapter in a few lines",
+        paragraphs: [
+          "Register the handlers your agent can invoke. The adapter accepts an assembled provider response directly and returns provider-native tool outputs.",
+        ],
+        code: `from latch_sdk import LatchClient, OpenAIToolAdapter
+
+latch = LatchClient("http://127.0.0.1:7070", token="...")
+tools = OpenAIToolAdapter(latch, {
+    "get_weather": get_weather,
+})
+
+outputs = tools.execute_responses(response)`,
+        language: "python",
+      },
+      {
+        id: "batch-safety",
+        title: "Authorize the whole batch first",
+        bullets: [
+          "Every argument string must be a strict JSON object.",
+          "Every function must have a registered local handler.",
+          "Every call must receive an explicit ALLOW before any handler starts.",
+          "Duplicate and replayed call IDs are rejected before side effects.",
+          "Provider, protocol, Latch, and handler-output failures stay closed.",
+        ],
+      },
+      {
+        id: "responses",
+        title: "Continue a Responses conversation",
+        paragraphs: [
+          "Preserve the original response output, including reasoning items, append the returned function_call_output items, then submit that combined input for the next turn.",
+        ],
+        note: "Pass only completed assembled responses. Streaming deltas and custom tools are rejected by this function-tool milestone.",
+      },
+      {
+        id: "chat",
+        title: "Chat Completions",
+        code: `const tools = new OpenAIToolAdapter(latch, {
+  get_weather: async (args) => getWeather(args.city),
+});
+
+const messages = await tools.executeChatCompletion(completion);`,
+        language: "typescript",
+        note: "Choice index 0 is the default. Select another index explicitly when needed; unselected choices never run.",
+      },
+    ],
+  },
+  {
     slug: "identities-budgets",
     group: "Configure",
     title: "Identities & budgets",
@@ -695,8 +751,8 @@ latch version [--json]`,
         id: "current-boundary",
         title: "Current boundary",
         paragraphs: [
-          "The current release secures MCP stdio, MCP Streamable HTTP, and generic HTTP APIs, with operator-bound identities, capability ceilings, cumulative budgets, exact local approvals, and structured shell, HTTP, SQL, and filesystem inspection.",
-          "OpenAI-compatible tool calling, LangChain/LangGraph, shell execution, CI/CD, cryptographic remote-agent identity, and centrally authenticated remote approvers remain follow-up priorities.",
+          "The current release secures MCP stdio, MCP Streamable HTTP, generic HTTP APIs, and OpenAI-compatible Responses API and Chat Completions function calls, with operator-bound identities, capability ceilings, cumulative budgets, exact local approvals, and structured shell, HTTP, SQL, and filesystem inspection.",
+          "LangChain/LangGraph, shell execution, CI/CD, cryptographic remote-agent identity, and centrally authenticated remote approvers remain follow-up priorities.",
         ],
       },
       {

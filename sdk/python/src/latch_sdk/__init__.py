@@ -11,6 +11,14 @@ from .models import (
     PolicyResult,
     Risk,
 )
+from .openai import (
+    OpenAIToolAdapter,
+    OpenAIToolExecutionError,
+    OpenAIToolNotAllowedError,
+    OpenAIToolProtocolError,
+    OpenAIToolReplayError,
+    UnknownOpenAIToolError,
+)
 
 __all__ = [
     "APIError",
@@ -23,7 +31,13 @@ __all__ = [
     "LatchUnavailable",
     "MEDIA_TYPE",
     "NotAllowedError",
+    "OpenAIToolAdapter",
+    "OpenAIToolExecutionError",
+    "OpenAIToolNotAllowedError",
+    "OpenAIToolProtocolError",
+    "OpenAIToolReplayError",
     "PolicyResult",
     "ProtocolError",
     "Risk",
+    "UnknownOpenAIToolError",
 ]

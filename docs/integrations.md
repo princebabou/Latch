@@ -1,6 +1,6 @@
 # Integrating Latch
 
-Latch has five stable integration surfaces:
+Latch has six stable integration surfaces:
 
 1. `latch proxy` is a transparent security boundary for local MCP stdio
    servers.
@@ -8,9 +8,11 @@ Latch has five stable integration surfaces:
    JSON, SSE, and session behavior.
 3. `latch proxy-api` protects ordinary HTTP APIs without changing the upstream
    service or the calling tool's request format.
-4. The versioned Enforcement API and official SDKs embed Latch into existing
+4. The OpenAI-compatible function adapter protects completed Responses API and
+   Chat Completions tool calls before registered handlers run.
+5. The versioned Enforcement API and official SDKs embed Latch into existing
    Go, Python, and TypeScript tool runners.
-5. `latch check` is a protocol-neutral policy gate for scripts, CI jobs,
+6. `latch check` is a protocol-neutral policy gate for scripts, CI jobs,
    orchestrators, and tool wrappers.
 
 ## Three-command MCP setup
@@ -120,6 +122,26 @@ credential forwarding so Latch evaluates the resulting external credential
 movement. See [Generic HTTP/API gateway](http-api-gateway.md) for the complete
 request model, status contract, body inspection limits, policy examples, and
 deployment controls.
+
+## OpenAI-compatible tool calling
+
+Register existing function handlers with the adapter included in each official
+SDK. It accepts completed OpenAI Responses API and Chat Completions objects,
+asks Latch about the complete call batch, and returns provider-native tool
+outputs:
+
+```python
+from latch_sdk import LatchClient, OpenAIToolAdapter
+
+client = LatchClient("http://127.0.0.1:7070", token="...")
+adapter = OpenAIToolAdapter(client, {"get_weather": get_weather})
+tool_outputs = adapter.execute_responses(response)
+```
+
+Malformed arguments, duplicate JSON keys, unknown tools, replays, non-allow
+decisions, and Latch failures prevent every handler in the batch from starting.
+See [OpenAI-compatible tool calling](openai-tool-calling.md) for Responses API,
+Chat Completions, Go, Python, and TypeScript examples.
 
 ## Trust binding
 

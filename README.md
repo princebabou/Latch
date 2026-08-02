@@ -20,6 +20,7 @@ It is deliberately a control plane, not a prompt-injection scanner. The intended
 - Official fail-closed Go, Python, and TypeScript SDKs with guarded execution helpers
 - Bidirectional MCP stdio and Streamable HTTP proxies that enforce every `tools/call` before forwarding
 - A generic HTTP/API reverse gateway with semantic body inspection, separated credentials, and allow-only forwarding
+- OpenAI-compatible Responses API and Chat Completions function adapters for Go, Python, and TypeScript
 - One-command policy scaffolding, deployment diagnostics, and native MCP configuration generation
 - Static cross-platform releases, Linux packages, a non-root multi-architecture container, SBOMs, checksums, and build attestations
 - `latch init`, `latch doctor`, `latch integrations`, `latch check`, `latch proxy`, `latch proxy-http`, `latch proxy-api`, `latch run`, `latch policies`, `latch identities`, `latch budgets`, `latch approvals`, and `latch logs` commands
@@ -411,11 +412,12 @@ container at `ghcr.io/princebabou/latch`.
 
 ## Current boundary
 
-Latch now secures MCP stdio, MCP Streamable HTTP, and generic HTTP APIs,
-alongside the stable Enforcement API and official Go, Python, and TypeScript
-SDKs. OpenAI-compatible tool calling, LangChain/LangGraph, shell, and CI/CD
-adapters remain the next v0.2 adapter milestones, followed by the conformance
-suite, policy playground, observability, and reference deployments.
+Latch now secures MCP stdio, MCP Streamable HTTP, generic HTTP APIs, and
+OpenAI-compatible Responses API and Chat Completions function calls, alongside
+the stable Enforcement API and official Go, Python, and TypeScript SDKs.
+LangChain/LangGraph, shell, and CI/CD adapters remain the next v0.2 adapter
+milestones, followed by the conformance suite, policy playground,
+observability, and reference deployments.
 
 Run the suite with:
 

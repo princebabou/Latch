@@ -22,3 +22,18 @@ For short tool wrappers, `Guard` invokes the callback only after an explicit,
 valid `ALLOW`. Connection failures, timeouts, redirects, oversized responses,
 malformed JSON, version mismatches, `BLOCK`, and `REQUIRE_APPROVAL` all prevent
 execution.
+
+Protect a completed OpenAI-compatible Responses payload without adding an
+OpenAI SDK dependency:
+
+```go
+adapter, err := latch.NewOpenAIToolAdapter(client, map[string]latch.OpenAIToolHandler{
+    "get_weather": func(ctx context.Context, args map[string]any) (any, error) {
+        return getWeather(args["city"]), nil
+    },
+})
+outputs, err := adapter.ExecuteResponses(ctx, responseJSON)
+```
+
+The adapter validates and allows the complete batch before executing any
+handler. It also supports Chat Completions through `ExecuteChatCompletion`.

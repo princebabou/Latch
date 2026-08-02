@@ -1,3 +1,7 @@
+import { LatchError } from "./errors.js";
+
+export { LatchError } from "./errors.js";
+
 export const API_VERSION = "latch.security/v1" as const;
 export const MEDIA_TYPE = "application/vnd.latch.decision.v1+json" as const;
 
@@ -84,10 +88,6 @@ export interface ClientOptions {
 
 export interface DecideOptions {
   signal?: AbortSignal;
-}
-
-export class LatchError extends Error {
-  override readonly name: string = "LatchError";
 }
 
 export class LatchUnavailable extends LatchError {
@@ -415,3 +415,5 @@ function decodeAPIError(status: number, payload: Uint8Array): APIError {
 function errorMessage(value: unknown): string {
   return value instanceof Error ? value.message : String(value);
 }
+
+export * from "./openai.js";

@@ -63,6 +63,30 @@ jobs:
             go build -trimpath -o /tmp/latch-build ./cmd/latch
           done
 
+  sdk-tests:
+    name: SDK tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Test Python SDK
+        env:
+          PYTHONPATH: sdk/python/src
+        run: python -m unittest discover -s sdk/python/tests -p 'test_*.py'
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: sdk/typescript/package-lock.json
+      - name: Install TypeScript SDK dependencies
+        working-directory: sdk/typescript
+        run: npm ci
+      - name: Test TypeScript SDK
+        working-directory: sdk/typescript
+        run: npm test
+
   container:
     name: Container
     runs-on: ubuntu-latest
