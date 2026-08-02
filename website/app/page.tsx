@@ -34,6 +34,7 @@ const integrations = [
   ["VS Code", "Generated stdio server registration"],
   ["CI / CD", "Native GitHub Action, summaries, and outputs"],
   ["Certified adapters", "Versioned cross-adapter security corpus"],
+  ["Policy Lab", "Actual-engine policy simulation and comparison"],
   ["Any tool wrapper", "Protocol-neutral check contract"],
 ];
 
@@ -209,8 +210,8 @@ export default function Home() {
               <h2>See the boundary think.</h2>
             </div>
             <p>
-              Explore representative actions and inspect the exact signal,
-              policy, and enforcement path behind each result.
+              Explore representative actions here, then run the local Policy
+              Lab to edit real YAML and compare the exact decision path.
             </p>
           </div>
           <DecisionPlayground compact />

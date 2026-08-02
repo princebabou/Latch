@@ -9,6 +9,8 @@ import (
 	"unicode/utf8"
 )
 
+const maxNestingDepth = 128
+
 // Decode parses exactly one UTF-8 JSON value into target. Duplicate object
 // keys are rejected at every depth so a policy engine and an upstream service
 // cannot disagree about which value is authoritative.
@@ -52,7 +54,7 @@ func decode(payload []byte, target any, disallowUnknown bool) error {
 func validate(payload []byte) error {
 	decoder := json.NewDecoder(bytes.NewReader(payload))
 	decoder.UseNumber()
-	if err := walkValue(decoder); err != nil {
+	if err := walkValue(decoder, 0); err != nil {
 		return err
 	}
 	if _, err := decoder.Token(); err != io.EOF {
@@ -64,7 +66,7 @@ func validate(payload []byte) error {
 	return nil
 }
 
-func walkValue(decoder *json.Decoder) error {
+func walkValue(decoder *json.Decoder, depth int) error {
 	token, err := decoder.Token()
 	if err != nil {
 		return err
@@ -72,6 +74,9 @@ func walkValue(decoder *json.Decoder) error {
 	delimiter, structured := token.(json.Delim)
 	if !structured {
 		return nil
+	}
+	if depth >= maxNestingDepth {
+		return fmt.Errorf("JSON nesting exceeds %d levels", maxNestingDepth)
 	}
 	switch delimiter {
 	case '{':
@@ -89,7 +94,7 @@ func walkValue(decoder *json.Decoder) error {
 				return fmt.Errorf("duplicate JSON object key %q", key)
 			}
 			seen[key] = struct{}{}
-			if err := walkValue(decoder); err != nil {
+			if err := walkValue(decoder, depth+1); err != nil {
 				return err
 			}
 		}
@@ -99,7 +104,7 @@ func walkValue(decoder *json.Decoder) error {
 		}
 	case '[':
 		for decoder.More() {
-			if err := walkValue(decoder); err != nil {
+			if err := walkValue(decoder, depth+1); err != nil {
 				return err
 			}
 		}

@@ -18,7 +18,8 @@ export default function DocsIndex() {
         <p>
           Everything you need to install Latch, protect an MCP server, write
           policy, bind identities, gate CI/CD, operate approvals and budgets,
-          certify integrations, and understand the security model.
+          simulate policy changes, certify integrations, and understand the
+          security model.
         </p>
         <div>
           <Link className="button button-primary" href="/docs/quickstart">

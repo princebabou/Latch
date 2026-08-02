@@ -1,6 +1,9 @@
 package strictjson
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestDecodeRejectsAmbiguousJSON(t *testing.T) {
 	t.Parallel()
@@ -34,5 +37,13 @@ func TestDecodeDisallowUnknownRejectsContractSmuggling(t *testing.T) {
 	}
 	if err := DecodeDisallowUnknown([]byte(`{"safe":true}`), &value); err != nil || !value.Safe {
 		t.Fatalf("valid strict contract error = %v, value = %#v", err, value)
+	}
+}
+
+func TestDecodeRejectsExcessiveNesting(t *testing.T) {
+	payload := strings.Repeat("[", maxNestingDepth+1) + "0" + strings.Repeat("]", maxNestingDepth+1)
+	var value any
+	if err := Decode([]byte(payload), &value); err == nil || !strings.Contains(err.Error(), "nesting exceeds") {
+		t.Fatalf("error = %v", err)
 	}
 }

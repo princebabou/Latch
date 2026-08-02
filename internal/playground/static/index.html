@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark">
+    <meta name="description" content="Local execution-free policy simulation for Latch">
+    <title>Latch Policy Lab</title>
+    <link rel="stylesheet" href="/app.css">
+  </head>
+  <body>
+    <div class="ambient ambient-one" aria-hidden="true"></div>
+    <div class="ambient ambient-two" aria-hidden="true"></div>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Latch Policy Lab home">
+        <span class="brand-mark">L</span>
+        <span><strong>LATCH</strong><small>POLICY LAB</small></span>
+      </a>
+      <div class="runtime-state">
+        <span class="pulse" aria-hidden="true"></span>
+        <span>LOCAL ENGINE</span>
+        <i aria-hidden="true"></i>
+        <span>NO EXECUTION</span>
+      </div>
+    </header>
+
+    <main>
+      <section class="intro">
+        <div>
+          <p class="eyebrow">SIMULATE / EXPLAIN / COMPARE</p>
+          <h1>Change the policy.<br><span>See the boundary move.</span></h1>
+        </div>
+        <div class="intro-copy">
+          <p>Test real Latch decisions against editable YAML and action JSON. Nothing is saved, forwarded, or executed.</p>
+          <div class="shortcut"><kbd>Ctrl</kbd><span>+</span><kbd>Enter</kbd><span>to evaluate</span></div>
+        </div>
+      </section>
+
+      <nav class="scenario-bar" aria-label="Action presets">
+        <span>ATTACK LAB</span>
+        <div id="scenario-list"></div>
+      </nav>
+
+      <section class="workbench" aria-label="Policy simulation workbench">
+        <article class="editor-card action-card">
+          <header class="card-header">
+            <div><span class="step">01</span><div><small>INTENT</small><h2>Action JSON</h2></div></div>
+            <button class="quiet-button" id="format-action" type="button">Format</button>
+          </header>
+          <div class="identity-grid">
+            <label>
+              <span>Trusted agent identity</span>
+              <input id="agent-id" type="text" maxlength="256" autocomplete="off" spellcheck="false">
+            </label>
+            <label class="verify-control">
+              <span>Transport verified</span>
+              <input id="identity-verified" type="checkbox" checked>
+              <i aria-hidden="true"></i>
+            </label>
+          </div>
+          <label class="editor-shell" for="action-editor">
+            <span class="editor-language">JSON</span>
+            <textarea id="action-editor" aria-label="Action JSON" spellcheck="false"></textarea>
+          </label>
+          <div class="editor-meta"><span id="action-meta">0 lines</span><span>Complete intended action</span></div>
+        </article>
+
+        <article class="editor-card policy-card">
+          <header class="card-header">
+            <div><span class="step">02</span><div><small>CONTROL</small><h2>Policy YAML</h2></div></div>
+            <button class="quiet-button" id="reset-policy" type="button">Reset baseline</button>
+          </header>
+          <div class="policy-state">
+            <span class="baseline-dot"></span>
+            <span id="policy-state-label">Loaded policy / baseline</span>
+            <code id="policy-digest">waiting</code>
+          </div>
+          <label class="editor-shell policy-editor-shell" for="policy-editor">
+            <span class="editor-language">YAML</span>
+            <textarea id="policy-editor" aria-label="Policy YAML" spellcheck="false"></textarea>
+          </label>
+          <div class="editor-meta"><span id="policy-meta">0 lines</span><span>In-memory simulation only</span></div>
+        </article>
+
+        <aside class="result-card" aria-live="polite" aria-busy="false">
+          <header class="card-header result-header">
+            <div><span class="step">03</span><div><small>EVIDENCE</small><h2>Assessment</h2></div></div>
+            <button class="quiet-button" id="copy-result" type="button" disabled>Copy JSON</button>
+          </header>
+          <div id="result-content" class="result-content">
+            <div class="empty-state">
+              <span class="radar" aria-hidden="true"><i></i></span>
+              <strong>Engine standing by</strong>
+              <p>Evaluate an action to inspect the decision, winning control, risk signals, matching rules, and policy delta.</p>
+            </div>
+          </div>
+        </aside>
+      </section>
+
+      <section class="run-dock">
+        <div>
+          <span class="safety-lock" aria-hidden="true">◆</span>
+          <p><strong>Simulation boundary</strong><br>No operational approvals, budget state, audit files, tools, or networks are touched.</p>
+        </div>
+        <button class="run-button" id="evaluate" type="button">
+          <span>Evaluate action</span><i aria-hidden="true">→</i>
+        </button>
+      </section>
+    </main>
+
+    <footer>
+      <span>LATCH PLAYGROUND / v1</span>
+      <span>ACTUAL POLICY ENGINE · ISOLATED STATE · LOOPBACK ONLY</span>
+    </footer>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

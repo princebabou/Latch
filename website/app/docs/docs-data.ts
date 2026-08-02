@@ -910,6 +910,84 @@ LATCH_AUDIT_TERMINAL=true`,
     ],
   },
   {
+    slug: "policy-playground",
+    group: "Operate",
+    title: "Interactive Policy Lab",
+    summary:
+      "Edit YAML, test complete actions through the real engine, and catch policy weakening without executing anything.",
+    readingTime: "9 min",
+    sections: [
+      {
+        id: "start",
+        title: "Open the local lab",
+        paragraphs: [
+          "The Policy Lab loads your YAML as an immutable comparison baseline and opens an execution-free workbench on your machine.",
+          "If the default latch.yaml is absent, Latch uses an in-memory balanced starter. An explicitly supplied missing config remains an error, so a typo cannot silently choose the sample.",
+        ],
+        code: `latch playground --config latch.yaml --open
+
+# Choose another loopback port
+latch playground \\
+  --config ./policies/agent.yaml \\
+  --agent desktop-agent \\
+  --listen 127.0.0.1:8087 \\
+  --open`,
+      },
+      {
+        id: "workflow",
+        title: "Test intent against control",
+        bullets: [
+          "Choose an attack-lab preset or paste a complete intended action as JSON.",
+          "Set the operator-established agent identity and its transport verification state.",
+          "Edit policy YAML in memory and evaluate with the button or Ctrl/Cmd + Enter.",
+          "Inspect the decision, winning source, identity result, normalized action, matching rules, risk signals, and reasons.",
+          "Review the automatic baseline delta before accepting a policy change.",
+        ],
+      },
+      {
+        id: "actual-engine",
+        title: "Actual engine, isolated state",
+        paragraphs: [
+          "This is not a second mock evaluator. Every run uses Latch's normalizer, strict policy parser, trusted-identity authorization, deny-overrides precedence, and deterministic risk engine.",
+          "The presets cover workspace reads, production writes, private-key access, credential exfiltration, and shell execution. Replace them with the exact action shape used by your integration.",
+        ],
+      },
+      {
+        id: "comparison",
+        title: "Policy weakening detection",
+        paragraphs: [
+          "The loaded policy remains the baseline while you edit. The lab compares decision, source, identity outcome, matching rules, and policy digest after every run.",
+        ],
+        bullets: [
+          "BLOCK to REQUIRE_APPROVAL or ALLOW is flagged as weakened.",
+          "REQUIRE_APPROVAL to ALLOW is flagged as weakened.",
+          "Changed rule paths are shown even when the final verdict stays the same.",
+          "Reset baseline restores the loaded policy without touching the file on disk.",
+        ],
+      },
+      {
+        id: "boundary",
+        title: "Simulation security boundary",
+        bullets: [
+          "Loopback-only listener; wildcard and LAN bindings are rejected.",
+          "Random same-origin browser token, strict host checks, restrictive CSP, no CORS, and bounded requests.",
+          "Ambiguous JSON and unknown or multi-document YAML fail closed.",
+          "No tool, process, network request, MCP server, or upstream API is invoked.",
+          "No policy, approval, budget, or audit file is written.",
+        ],
+        note: "Durable approval grants and current budget consumption are intentionally excluded. Use latch check --json for live local state and a first-class adapter for enforcement.",
+      },
+      {
+        id: "contract",
+        title: "Local API contract",
+        paragraphs: [
+          "The interface uses latch.playground/v1 for bootstrap and simulation results. Successful responses include the normalized action, full assessment, matching rules, policy summary, and decision delta.",
+          "External integrations should continue to use latch.security/v1. The playground contract grants no authority to execute a side effect.",
+        ],
+      },
+    ],
+  },
+  {
     slug: "conformance",
     group: "Operate",
     title: "Conformance & security testing",
@@ -1003,6 +1081,7 @@ latch integrations http [--url http://127.0.0.1:7072]
 latch check --tool <name> [--arg key=value] [options]
 latch ci --agent <trusted-id> --tool <name> [options]
 latch conformance [--json|--manifest] [--timeout 30s]
+latch playground [--config policy.yaml] [--open]
 latch proxy [options] -- <mcp-server-command> [args...]
 latch proxy-http --upstream <https://server/mcp> [options]
 latch proxy-api --upstream <https://api.example> [options]
@@ -1051,6 +1130,14 @@ latch version [--json]`,
           "Run the embedded offline security corpus across built-in boundaries. Use --json for CI, --manifest to inspect exact requirements, and --timeout to bound the run. Exit 0 means every check passed; exit 1 means at least one security requirement failed.",
         ],
         code: `latch conformance --json`,
+      },
+      {
+        id: "playground",
+        title: "playground",
+        paragraphs: [
+          "Start the loopback-only Policy Lab with an editable baseline policy. The lab uses the actual evaluation engine, compares changes, and never executes or forwards an action. Use --open to launch the default browser.",
+        ],
+        code: `latch playground --config latch.yaml --open`,
       },
       {
         id: "proxy",
@@ -1119,7 +1206,7 @@ latch version [--json]`,
         title: "Current boundary",
         paragraphs: [
           "The v0.2 preview secures MCP stdio, MCP Streamable HTTP, generic HTTP APIs, OpenAI-compatible function calls, LangChain agents, LangGraph ToolNodes, fingerprint-bound local process execution, and CI/CD gates with native GitHub Actions reporting.",
-          "A versioned conformance suite now certifies decision, wire, and fail-closed SDK client behavior in CI. Cryptographic remote-agent identity, centrally authenticated remote approvers, the interactive policy playground, and observability remain follow-up priorities.",
+          "A versioned conformance suite certifies decision, wire, and fail-closed SDK client behavior in CI. The local Policy Lab now evaluates editable YAML and action JSON through the real engine, explains the result, and detects policy weakening without touching operational state. Observability and reference deployments remain the next v0.2 priorities.",
         ],
       },
       {

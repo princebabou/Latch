@@ -89,6 +89,16 @@ containers, packages, provenance verification, and service hardening.
 Run `latch conformance` to certify the built-in boundaries against the
 versioned security corpus; see the [conformance guide](docs/conformance.md).
 
+Open the local Policy Lab to edit YAML, paste an intended action, inspect the
+real decision trace, and compare policy changes without executing anything:
+
+```sh
+latch playground --config latch.yaml --open
+```
+
+See the [interactive policy playground guide](docs/policy-playground.md) for
+the isolation contract and complete workflow.
+
 `latch check` exits `0` only for an allowed action and exits `3` for a blocked or pending-approval action, which makes it friendly to CI and wrappers.
 
 ## MCP stdio proxy
@@ -449,9 +459,11 @@ native LangChain middleware, protected LangGraph ToolNodes, fail-closed local
 process execution, a native CI adapter, packaged GitHub Action, reusable policy
 workflow, the stable Enforcement API, and official Go, Python, and TypeScript
 SDKs. A versioned cross-adapter conformance suite now certifies the decision,
-wire, and fail-closed client boundaries in CI. The interactive policy
-playground is the next v0.2 milestone, followed by observability and reference
-deployments.
+wire, and fail-closed client boundaries in CI. The local Policy Lab now runs
+editable policy and action experiments through the real evaluation engine,
+explains every result, and flags policy edits that weaken an outcome without
+touching tools or durable state. Observability is the next v0.2 milestone,
+followed by reference deployments.
 
 Run the suite with:
 

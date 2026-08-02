@@ -10,6 +10,36 @@ import (
 	"github.com/princebabou/Latch/pkg/models"
 )
 
+func TestParseRejectsUnknownFieldsAndMultipleDocuments(t *testing.T) {
+	base := `version: 1
+enforcement:
+  approval_threshold: 40
+  block_threshold: 90
+approvals:
+  store_path: approvals.json
+  default_ttl: 15m
+  max_ttl: 24h
+  lock_timeout: 2s
+budgets:
+  store_path: budgets.json
+  lock_timeout: 2s
+audit:
+  path: audit.jsonl
+`
+	for name, document := range map[string]string{
+		"unknown":  base + "mystery_control: true\n",
+		"multiple": base + "---\n" + base,
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := Parse([]byte(document), t.TempDir()); err == nil {
+				t.Fatal("unsafe policy document was accepted")
+			} else if name == "unknown" && !strings.Contains(err.Error(), "field mystery_control") {
+				t.Fatalf("error = %v", err)
+			}
+		})
+	}
+}
+
 func TestEvaluateBlockOverridesApproval(t *testing.T) {
 	config := DefaultConfig()
 	config.Rules = []Rule{

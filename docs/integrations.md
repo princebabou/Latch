@@ -26,6 +26,10 @@ Every integration is tested against a versioned security corpus. Run
 [Conformance and security testing](conformance.md) for the certification matrix,
 SDK profile, and rules for adding an adapter.
 
+Before deploying a policy, use the local [interactive policy playground](policy-playground.md)
+to test complete actions, inspect matching controls, and compare edits through
+the real engine without forwarding or executing anything.
+
 ## Three-command MCP setup
 
 Create a production-oriented policy, verify it, and generate a native client

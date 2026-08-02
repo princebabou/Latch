@@ -6,7 +6,7 @@ import { SiteHeader } from "../components/SiteHeader";
 export const metadata: Metadata = {
   title: "Decision playground",
   description:
-    "Explore representative Latch decisions and inspect their policy, risk, identity, and enforcement paths.",
+    "Explore representative Latch decisions, then run the actual local Policy Lab against editable YAML and action JSON.",
 };
 
 export default function PlaygroundPage() {
@@ -19,23 +19,22 @@ export default function PlaygroundPage() {
           <h1>Decision playground</h1>
         </div>
         <p>
-          Explore representative normalized actions. This visualization mirrors
-          Latch’s deterministic decision contract; it does not execute tools or
-          send data anywhere.
+          Explore representative normalized actions here, then run the actual
+          local Policy Lab against your own editable YAML and action JSON.
         </p>
       </section>
       <section className="section-shell playground-page">
         <DecisionPlayground />
         <aside className="playground-note">
-          <span>SIMULATION BOUNDARY</span>
+          <span>ACTUAL LOCAL ENGINE</span>
           <p>
-            Production decisions come from your YAML policy, verified launcher
-            identity, durable budget state, approvals, and the exact normalized
-            action. Use <code>latch check --json</code> to inspect a real local
-            assessment.
+            Launch the loopback-only workbench with{" "}
+            <code>latch playground --config latch.yaml --open</code>. It compares
+            policy edits, exposes the complete evidence trail, and never saves,
+            forwards, or executes an action.
           </p>
-          <Link href="/docs/policies">
-            Learn how decisions are made <span aria-hidden="true">→</span>
+          <Link href="/docs/policy-playground">
+            Open the Policy Lab guide <span aria-hidden="true">→</span>
           </Link>
         </aside>
       </section>

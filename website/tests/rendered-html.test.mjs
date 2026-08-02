@@ -64,9 +64,17 @@ test("server-renders documentation and playground routes", async () => {
   assert.match(conformanceHtml, /41\/41 checks/);
   assert.match(conformanceHtml, /latch conformance --json/);
 
+  const policyLabResponse = await render("/docs/policy-playground");
+  const policyLabHtml = await policyLabResponse.text();
+  assert.equal(policyLabResponse.status, 200);
+  assert.match(policyLabHtml, /Interactive Policy Lab/);
+  assert.match(policyLabHtml, /latch playground --config latch\.yaml --open/);
+  assert.match(policyLabHtml, /Policy weakening detection/);
+
   const playgroundResponse = await render("/playground");
   const playgroundHtml = await playgroundResponse.text();
   assert.equal(playgroundResponse.status, 200);
   assert.match(playgroundHtml, /Decision playground/);
   assert.match(playgroundHtml, /Workspace read/);
+  assert.match(playgroundHtml, /latch playground --config latch\.yaml --open/);
 });

@@ -2,10 +2,12 @@
 package policy
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -173,21 +175,47 @@ func Load(path string) (Config, error) {
 	if err != nil {
 		return Config{}, fmt.Errorf("read policy file: %w", err)
 	}
+	absolutePath, err := filepath.Abs(path)
+	if err != nil {
+		return Config{}, fmt.Errorf("resolve policy path: %w", err)
+	}
+	return Parse(data, filepath.Dir(absolutePath))
+}
+
+// Parse decodes one strict YAML policy document, applies safe defaults,
+// resolves operational paths against baseDirectory, and validates the result.
+// Unknown fields and extra YAML documents are rejected so policy typos cannot
+// silently weaken an intended control.
+func Parse(data []byte, baseDirectory string) (Config, error) {
 	config := DefaultConfig()
-	if err := yaml.Unmarshal(data, &config); err != nil {
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
+	decoder.KnownFields(true)
+	if err := decoder.Decode(&config); err != nil {
+		if err == io.EOF {
+			return Config{}, fmt.Errorf("parse policy file: policy document is empty")
+		}
+		return Config{}, fmt.Errorf("parse policy file: %w", err)
+	}
+	var extra yaml.Node
+	if err := decoder.Decode(&extra); err != io.EOF {
+		if err == nil {
+			return Config{}, fmt.Errorf("parse policy file: multiple YAML documents are not supported")
+		}
 		return Config{}, fmt.Errorf("parse policy file: %w", err)
 	}
 	for index := range config.Rules {
 		config.Rules[index].Action = models.Decision(strings.ToUpper(strings.TrimSpace(string(config.Rules[index].Action))))
 	}
-	absolutePath, err := filepath.Abs(path)
-	if err != nil {
-		return Config{}, fmt.Errorf("resolve policy path: %w", err)
+	if strings.TrimSpace(baseDirectory) == "" {
+		baseDirectory = "."
 	}
-	baseDirectory := filepath.Dir(absolutePath)
-	config.Approvals.StorePath = resolveOperationalPath(baseDirectory, config.Approvals.StorePath)
-	config.Budgets.StorePath = resolveOperationalPath(baseDirectory, config.Budgets.StorePath)
-	config.Audit.Path = resolveOperationalPath(baseDirectory, config.Audit.Path)
+	absoluteDirectory, err := filepath.Abs(baseDirectory)
+	if err != nil {
+		return Config{}, fmt.Errorf("resolve policy base directory: %w", err)
+	}
+	config.Approvals.StorePath = resolveOperationalPath(absoluteDirectory, config.Approvals.StorePath)
+	config.Budgets.StorePath = resolveOperationalPath(absoluteDirectory, config.Budgets.StorePath)
+	config.Audit.Path = resolveOperationalPath(absoluteDirectory, config.Audit.Path)
 	if err := config.Validate(); err != nil {
 		return Config{}, err
 	}
