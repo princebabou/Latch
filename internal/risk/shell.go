@@ -30,18 +30,27 @@ type shellProgram struct {
 }
 
 func collectShellSignals(action models.Action, collector *signalCollector) {
+	declaredShell := executableName(firstString(action.Arguments, "shell", "interpreter"))
+	declaredPowerShell := declaredShell == "powershell" || declaredShell == "pwsh"
 	commandAnalyzed := false
 	if command, ok := firstValue(action.Arguments, "command", "cmd", "script"); ok {
 		switch typed := command.(type) {
 		case string:
-			analyzeShellText(typed, collector, 0)
+			if declaredPowerShell {
+				analyzePowerShellText(typed, collector, 0)
+			} else {
+				analyzeShellText(typed, collector, 0)
+				if looksLikePowerShell(typed) {
+					analyzePowerShellText(typed, collector, 0)
+				}
+			}
 			commandAnalyzed = true
 		case []string:
-			analyzeShellCommands([]shellCommand{{words: append([]string(nil), typed...)}}, collector, 0)
+			analyzeShellCommands([]shellCommand{{words: append([]string(nil), typed...)}}, collector, 0, declaredPowerShell)
 			commandAnalyzed = true
 		case []any:
 			if words, ok := stringValues(typed); ok {
-				analyzeShellCommands([]shellCommand{{words: words}}, collector, 0)
+				analyzeShellCommands([]shellCommand{{words: words}}, collector, 0, declaredPowerShell)
 				commandAnalyzed = true
 			} else {
 				collector.add("shell-parse-ambiguity", 45, "Command array contains a non-text argument")
@@ -67,7 +76,7 @@ func collectShellSignals(action models.Action, collector *signalCollector) {
 					}
 				}
 			}
-			analyzeShellCommands([]shellCommand{{words: words}}, collector, 0)
+			analyzeShellCommands([]shellCommand{{words: words}}, collector, 0, declaredPowerShell)
 		}
 	}
 
@@ -149,13 +158,13 @@ func analyzeShellText(command string, collector *signalCollector, depth int) {
 	if program.malformed {
 		collector.add("shell-parse-ambiguity", 45, "Shell syntax is incomplete or ambiguous")
 	}
-	analyzeShellCommands(program.commands, collector, depth)
+	analyzeShellCommands(program.commands, collector, depth, false)
 	for _, substitution := range program.substitutions {
 		analyzeShellText(substitution, collector, depth+1)
 	}
 }
 
-func analyzeShellCommands(commands []shellCommand, collector *signalCollector, depth int) {
+func analyzeShellCommands(commands []shellCommand, collector *signalCollector, depth int, powershell bool) {
 	for index, command := range commands {
 		if payload, ok := shellWrapperPayload(command.words); ok {
 			analyzeShellText(payload, collector, depth+1)
@@ -223,16 +232,42 @@ func analyzeShellCommands(commands []shellCommand, collector *signalCollector, d
 			if len(args) == 0 {
 				collector.add("environment-enumeration", 25, "Environment enumeration can expose secrets")
 			}
-		case "eval", "iex", "invoke-expression":
+		case "eval", "iex", "invoke-expression", "invoke-command":
 			collector.add("dynamic-code-execution", 55, "Dynamic command evaluation detected")
 		case "powershell", "pwsh":
 			if hasPowerShellEncodedCommand(args) {
 				collector.add("encoded-script-execution", 85, "Encoded PowerShell execution detected")
 			}
+			if hasExecutionPolicyBypassFlag(args) {
+				collector.add("execution-policy-bypass", 45, "PowerShell execution policy is bypassed for this invocation")
+			}
+			if hasWindowStyleHidden(args) {
+				collector.add("hidden-window-execution", 35, "Hidden-window execution requested")
+			}
+		case "set-executionpolicy":
+			if hasArgumentFold(args, "bypass") || hasArgumentFold(args, "unrestricted") {
+				collector.add("execution-policy-bypass", 55, "PowerShell execution policy is weakened")
+			}
+		case "add-mppreference", "set-mppreference":
+			collector.add("security-control-tampering", 75, "Endpoint protection configuration is modified")
+		case "reg":
+			if startsWithFold(args, "add") && containsWindowsRunKey(args) {
+				collector.add("persistence-mechanism", 55, "Windows autorun registry persistence requested")
+			}
+		case "schtasks":
+			if hasArgumentFold(args, "/create") {
+				collector.add("persistence-mechanism", 55, "Scheduled task persistence requested")
+			}
+		case "register-scheduledtask":
+			collector.add("persistence-mechanism", 55, "Scheduled task persistence requested")
 		}
 
 		if payload, ok := nestedShellPayload(executable, args); ok {
-			analyzeShellText(payload, collector, depth+1)
+			if powerShellInterpreter(executable) {
+				analyzePowerShellText(payload, collector, depth+1)
+			} else {
+				analyzeShellText(payload, collector, depth+1)
+			}
 		}
 		if isDynamicRuntime(executable, args) {
 			collector.add("dynamic-code-execution", 55, "Inline code execution detected")
@@ -262,7 +297,13 @@ func analyzeShellCommands(commands []shellCommand, collector *signalCollector, d
 			if output != "" && ((isCommandConsumer(executable) && containsExactArgument(args, output)) || sameExecutablePath(executable, output)) {
 				collector.add("remote-script-execution", 85, "Downloaded content is executed by a command interpreter")
 			}
+			if output != "" && executable == "start-process" && containsExactArgument(args, output) {
+				collector.add("remote-script-execution", 85, "Downloaded content is launched as a new process")
+			}
 		}
+	}
+	if powershell {
+		collectPowerShellCommandSignals(commands, collector)
 	}
 }
 
@@ -591,7 +632,7 @@ func isDynamicRuntime(executable string, args []string) bool {
 
 func isDownloader(executable string) bool {
 	switch executable {
-	case "curl", "wget", "fetch", "invoke-webrequest", "invoke-restmethod", "iwr", "irm":
+	case "curl", "wget", "fetch", "invoke-webrequest", "invoke-restmethod", "iwr", "irm", "start-bitstransfer":
 		return true
 	default:
 		return false
@@ -629,6 +670,10 @@ func downloaderOutput(executable string, args []string) string {
 		}
 	case "invoke-webrequest", "invoke-restmethod", "iwr", "irm":
 		if value, ok := valueAfterFlagFold(args, "-outfile"); ok {
+			return value
+		}
+	case "start-bitstransfer":
+		if value, ok := valueAfterFlagFold(args, "-destination"); ok {
 			return value
 		}
 	}
@@ -811,10 +856,22 @@ func unsafeWindowsACL(args []string) bool {
 		(strings.Contains(joined, ":f") || strings.Contains(joined, "(f)") || strings.Contains(joined, "full"))
 }
 
+// hasPowerShellEncodedCommand accepts every abbreviation powershell.exe and
+// pwsh resolve to -EncodedCommand, such as -e, -ec, and -enc.
 func hasPowerShellEncodedCommand(args []string) bool {
 	for _, argument := range args {
-		switch strings.ToLower(argument) {
-		case "-encodedcommand", "-enc":
+		normalized := strings.ToLower(argument)
+		if !strings.HasPrefix(normalized, "-e") {
+			continue
+		}
+		rest := strings.TrimPrefix(normalized, "-")
+		// powershell.exe resolves -e and -ec to EncodedCommand, along with
+		// every longer prefix of the parameter name. -ep and -ex are the
+		// ExecutionPolicy abbreviations and never encode a command.
+		if rest == "e" || rest == "ec" {
+			return true
+		}
+		if len(rest) >= 2 && strings.HasPrefix("encodedcommand", rest) {
 			return true
 		}
 	}

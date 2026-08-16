@@ -20,6 +20,7 @@ var hardDenySignals = map[string]struct{}{
 	"encoded-script-execution":    {},
 	"shell-parse-ambiguity":       {},
 	"shell-nesting-limit":         {},
+	"security-control-tampering":  {},
 	"database-dump":               {},
 	"destructive-database-query":  {},
 	"unscoped-database-mutation":  {},
