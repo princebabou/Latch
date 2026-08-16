@@ -99,10 +99,7 @@ export function DecisionPlayground({ compact = false }: { compact?: boolean }) {
   return (
     <div className={`playground ${compact ? "playground-compact" : ""}`}>
       <div className="scenario-panel">
-        <div className="panel-label">
-          <span>01</span>
-          <strong>Choose an agent action</strong>
-        </div>
+        <div className="panel-label">Choose an agent action</div>
         <div className="scenario-list" role="list">
           {scenarios.map((item) => (
             <button
@@ -114,7 +111,6 @@ export function DecisionPlayground({ compact = false }: { compact?: boolean }) {
             >
               <span>{item.label}</span>
               <code>{item.tool}</code>
-              <i aria-hidden="true">→</i>
             </button>
           ))}
         </div>
@@ -138,14 +134,12 @@ export function DecisionPlayground({ compact = false }: { compact?: boolean }) {
 
       <div className="assessment-panel" aria-live="polite">
         <div className="panel-label">
-          <span>02</span>
-          <strong>Inspect the assessment</strong>
+          Inspect the assessment
           <small>evaluation {String(evaluations).padStart(2, "0")}</small>
         </div>
         <div className={`decision-banner ${decisionClass}`}>
-          <span>DECISION</span>
+          <span>Decision</span>
           <strong>{scenario.decision}</strong>
-          <i aria-hidden="true">{scenario.decision === "ALLOW" ? "✓" : "!"}</i>
         </div>
         <div className="assessment-grid">
           <div>
@@ -166,7 +160,7 @@ export function DecisionPlayground({ compact = false }: { compact?: boolean }) {
           </div>
         </div>
         <div className="signal-list">
-          <span>SIGNALS</span>
+          <span>Signals</span>
           <div>
             {scenario.signals.map((signal) => (
               <small key={signal}>{signal}</small>

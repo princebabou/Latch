@@ -46,12 +46,12 @@ export default async function DocArticle({ params }: { params: Params }) {
           <div className="doc-meta">
             <span>v0.2 preview</span>
             <span>{doc.readingTime} read</span>
-            <span>Source grounded</span>
+            <span>source grounded</span>
           </div>
         </header>
 
         <nav className="on-this-page" aria-label="On this page">
-          <span>ON THIS PAGE</span>
+          <span>On this page</span>
           {doc.sections.map((section) => (
             <a href={`#${section.id}`} key={section.id}>
               {section.title}
@@ -60,11 +60,8 @@ export default async function DocArticle({ params }: { params: Params }) {
         </nav>
 
         <div className="doc-sections">
-          {doc.sections.map((section, index) => (
+          {doc.sections.map((section) => (
             <section id={section.id} key={section.id}>
-              <span className="section-number">
-                {String(index + 1).padStart(2, "0")}
-              </span>
               <h2>{section.title}</h2>
               {section.paragraphs?.map((paragraph) => (
                 <p key={paragraph}>{paragraph}</p>
@@ -89,7 +86,7 @@ export default async function DocArticle({ params }: { params: Params }) {
               )}
               {section.note && (
                 <aside className="doc-note">
-                  <span>BOUNDARY NOTE</span>
+                  <span>Boundary note</span>
                   <p>{section.note}</p>
                 </aside>
               )}

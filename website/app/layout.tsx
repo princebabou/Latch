@@ -50,7 +50,9 @@ export async function generateMetadata(): Promise<Metadata> {
       description,
       images: [`${origin}/og.png`],
     },
-    icons: {},
+    icons: {
+      icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
+    },
   };
 }
 
@@ -61,6 +63,22 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        <link
+          rel="preload"
+          href="/fonts/newsreader.woff2"
+          as="font"
+          type="font/woff2"
+          crossOrigin="anonymous"
+        />
+        <link
+          rel="preload"
+          href="/fonts/instrument-sans.woff2"
+          as="font"
+          type="font/woff2"
+          crossOrigin="anonymous"
+        />
+      </head>
       <body>{children}</body>
     </html>
   );

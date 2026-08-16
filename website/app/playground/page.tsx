@@ -13,28 +13,28 @@ export default function PlaygroundPage() {
   return (
     <main>
       <SiteHeader />
-      <section className="interior-hero section-shell">
-        <div>
-          <span className="kicker">INTERACTIVE / LOCAL SIMULATION</span>
+      <section className="interior-hero">
+        <div className="shell">
+          <span className="kicker">Interactive · local simulation</span>
           <h1>Decision playground</h1>
+          <p className="interior-lede">
+            Explore representative normalized actions here, then run the actual
+            local Policy Lab against your own editable YAML and action JSON.
+          </p>
         </div>
-        <p>
-          Explore representative normalized actions here, then run the actual
-          local Policy Lab against your own editable YAML and action JSON.
-        </p>
       </section>
-      <section className="section-shell playground-page">
+      <section className="shell playground-page">
         <DecisionPlayground />
         <aside className="playground-note">
-          <span>ACTUAL LOCAL ENGINE</span>
+          <span>Actual local engine</span>
           <p>
             Launch the loopback-only workbench with{" "}
-            <code>latch playground --config latch.yaml --open</code>. It compares
-            policy edits, exposes the complete evidence trail, and never saves,
-            forwards, or executes an action.
+            <code>latch playground --config latch.yaml --open</code>. It
+            compares policy edits, exposes the complete evidence trail, and
+            never saves, forwards, or executes an action.
           </p>
-          <Link href="/docs/policy-playground">
-            Open the Policy Lab guide <span aria-hidden="true">→</span>
+          <Link className="text-link" href="/docs/policy-playground">
+            Open the Policy Lab guide →
           </Link>
         </aside>
       </section>

@@ -13,11 +13,10 @@ export function DocsShell({
   return (
     <main>
       <SiteHeader />
-      <div className="docs-layout section-shell">
+      <div className="docs-layout shell">
         <aside className="docs-sidebar">
           <Link className="docs-home-link" href="/docs">
-            <span>DOCS</span>
-            <strong>Latch manual</strong>
+            Latch manual
           </Link>
           <nav aria-label="Documentation navigation">
             {Object.entries(groupedDocs).map(([group, pages]) => (
@@ -35,13 +34,7 @@ export function DocsShell({
               </div>
             ))}
           </nav>
-          <div className="docs-sidebar-status">
-            <i className="live-dot" />
-            <div>
-              <strong>Docs for v0.2</strong>
-              <span>Preview</span>
-            </div>
-          </div>
+          <div className="docs-sidebar-status">Docs for v0.2 preview</div>
         </aside>
         <div className="docs-content">{children}</div>
       </div>
