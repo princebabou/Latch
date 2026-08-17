@@ -1,5 +1,13 @@
 """Official fail-closed Python client for Latch."""
 
+from .anthropic import (
+    AnthropicToolAdapter,
+    AnthropicToolExecutionError,
+    AnthropicToolNotAllowedError,
+    AnthropicToolProtocolError,
+    AnthropicToolReplayError,
+    UnknownAnthropicToolError,
+)
 from .client import LatchClient
 from .errors import APIError, LatchError, LatchUnavailable, NotAllowedError, ProtocolError
 from .models import (
@@ -32,6 +40,11 @@ __all__ = [
     "APIError",
     "API_VERSION",
     "Action",
+    "AnthropicToolAdapter",
+    "AnthropicToolExecutionError",
+    "AnthropicToolNotAllowedError",
+    "AnthropicToolProtocolError",
+    "AnthropicToolReplayError",
     "Decision",
     "Identity",
     "LatchClient",
@@ -53,5 +66,6 @@ __all__ = [
     "ShellProtocolError",
     "ShellReplayError",
     "ShellResult",
+    "UnknownAnthropicToolError",
     "UnknownOpenAIToolError",
 ]

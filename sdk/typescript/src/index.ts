@@ -417,4 +417,5 @@ function errorMessage(value: unknown): string {
 }
 
 export * from "./openai.js";
+export * from "./anthropic.js";
 export * from "./langchain.js";
