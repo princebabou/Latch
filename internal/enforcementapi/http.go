@@ -2,6 +2,7 @@
 package enforcementapi
 
 import (
+	"context"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/json"
@@ -14,6 +15,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/princebabou/Latch/internal/approval"
+	"github.com/princebabou/Latch/internal/approvalnotify"
 	"github.com/princebabou/Latch/internal/audit"
 	"github.com/princebabou/Latch/internal/decision"
 	"github.com/princebabou/Latch/internal/normalize"
@@ -34,6 +37,8 @@ type Options struct {
 	Service        *decision.Service
 	AgentID        string
 	BearerToken    string
+	ApproverToken  string
+	Notifier       *approvalnotify.Notifier
 	AllowedOrigins []string
 	MaxBodyBytes   int64
 	ReplayWindow   time.Duration
@@ -47,6 +52,9 @@ type Handler struct {
 	agentID        string
 	bearerHash     [sha256.Size]byte
 	requireBearer  bool
+	approverHash   [sha256.Size]byte
+	requireApprove bool
+	notifier       *approvalnotify.Notifier
 	allowedOrigins map[string]struct{}
 	maxBodyBytes   int64
 	replay         *replayCache
@@ -82,7 +90,7 @@ func New(options Options) (*Handler, error) {
 	}
 	handler := &Handler{
 		service: options.Service, agentID: strings.TrimSpace(options.AgentID),
-		allowedOrigins: origins, maxBodyBytes: options.MaxBodyBytes,
+		notifier: options.Notifier, allowedOrigins: origins, maxBodyBytes: options.MaxBodyBytes,
 		replay:      newReplayCache(options.ReplayWindow, options.ReplayLimit, options.Now),
 		diagnostics: options.Diagnostics,
 	}
@@ -92,6 +100,16 @@ func New(options Options) (*Handler, error) {
 		}
 		handler.requireBearer = true
 		handler.bearerHash = sha256.Sum256([]byte(options.BearerToken))
+	}
+	if options.ApproverToken != "" {
+		if len(options.ApproverToken) < 32 || len(options.ApproverToken) > 4096 {
+			return nil, fmt.Errorf("approver token must contain between 32 and 4096 bytes")
+		}
+		if options.ApproverToken == options.BearerToken {
+			return nil, fmt.Errorf("approver token must differ from the decision bearer token")
+		}
+		handler.requireApprove = true
+		handler.approverHash = sha256.Sum256([]byte(options.ApproverToken))
 	}
 	return handler, nil
 }
@@ -118,6 +136,9 @@ func (h *Handler) ServeHTTP(response http.ResponseWriter, request *http.Request)
 		h.writeJSON(response, http.StatusOK, map[string]any{"api_version": api.APIVersion, "status": "ok"})
 		return
 	case "/v1/decisions":
+	case "/v1/approvals":
+		h.serveApprovals(response, request)
+		return
 	default:
 		h.writeError(response, http.StatusNotFound, "not_found", "endpoint not found", "")
 		return
@@ -220,19 +241,157 @@ func (h *Handler) ServeHTTP(response http.ResponseWriter, request *http.Request)
 	if h.service.Policy.Audit.Terminal {
 		fmt.Fprintln(h.diagnostics, audit.Terminal(result.Event))
 	}
-	h.writeJSON(response, http.StatusOK, api.Response(input.RequestID, result.Assessment, result.OperationalError != nil))
+	decisionResponse := api.Response(input.RequestID, result.Assessment, result.OperationalError != nil)
+	if result.Approval == "pending" {
+		if fingerprint, err := approval.Fingerprint(result.Action); err == nil {
+			decisionResponse.Approval = &api.ApprovalChallenge{Status: "pending", Fingerprint: fingerprint}
+			h.notifyPending(request.Context(), result, fingerprint)
+		}
+	}
+	h.writeJSON(response, http.StatusOK, decisionResponse)
+}
+
+// notifyPending fires a best-effort out-of-band alert. A delivery failure is
+// logged to diagnostics and never affects the already-pending verdict.
+func (h *Handler) notifyPending(ctx context.Context, result decision.Result, fingerprint string) {
+	if h.notifier == nil {
+		return
+	}
+	notification := approvalnotify.FromResult(result.Action, result.Assessment, fingerprint)
+	if err := h.notifier.Notify(ctx, notification); err != nil {
+		fmt.Fprintf(h.diagnostics, "Latch: approval notification failed: %v\n", err)
+	}
 }
 
 func (h *Handler) authorized(header string) bool {
 	if !h.requireBearer {
 		return true
 	}
+	return matchesToken(header, h.bearerHash)
+}
+
+func (h *Handler) approverAuthorized(header string) bool {
+	return matchesToken(header, h.approverHash)
+}
+
+func matchesToken(header string, expected [sha256.Size]byte) bool {
 	scheme, token, found := strings.Cut(strings.TrimSpace(header), " ")
 	if !found || !strings.EqualFold(scheme, "Bearer") || strings.TrimSpace(token) == "" {
 		return false
 	}
 	actual := sha256.Sum256([]byte(strings.TrimSpace(token)))
-	return subtle.ConstantTimeCompare(actual[:], h.bearerHash[:]) == 1
+	return subtle.ConstantTimeCompare(actual[:], expected[:]) == 1
+}
+
+// approvalRequest issues a human grant for one exact pending action. The
+// action is the same shape as a decision request so the approver names the
+// action explicitly rather than trusting an opaque fingerprint.
+type approvalRequest struct {
+	APIVersion string     `json:"api_version"`
+	Approver   string     `json:"approver"`
+	TTLSeconds int        `json:"ttl_seconds,omitempty"`
+	Action     api.Action `json:"action"`
+}
+
+// serveApprovals issues and lists human grants. It is enabled only when a
+// dedicated approver token is configured, and that token is distinct from the
+// decision bearer token so an agent can never approve its own held actions.
+func (h *Handler) serveApprovals(response http.ResponseWriter, request *http.Request) {
+	if !h.requireApprove {
+		h.writeError(response, http.StatusNotFound, "not_found", "endpoint not found", "")
+		return
+	}
+	if request.Method != http.MethodGet && request.Method != http.MethodPost {
+		response.Header().Set("Allow", "GET, POST")
+		h.writeError(response, http.StatusMethodNotAllowed, "method_not_allowed", "only GET and POST are supported", "")
+		return
+	}
+	if !h.approverAuthorized(request.Header.Get("Authorization")) {
+		response.Header().Set("WWW-Authenticate", `Bearer realm="latch-approvals"`)
+		h.writeError(response, http.StatusUnauthorized, "unauthorized", "valid approver authentication is required", "")
+		return
+	}
+	if request.Method == http.MethodGet {
+		grants, err := h.service.ApprovalStore.List()
+		if err != nil {
+			h.writeError(response, http.StatusServiceUnavailable, "approval_store_failure", "approval state could not be read", "")
+			return
+		}
+		h.writeJSON(response, http.StatusOK, map[string]any{"api_version": api.APIVersion, "grants": grants})
+		return
+	}
+
+	mediaType, _, err := mime.ParseMediaType(request.Header.Get("Content-Type"))
+	if err != nil || (mediaType != "application/json" && mediaType != api.MediaType) {
+		h.writeError(response, http.StatusUnsupportedMediaType, "unsupported_media_type", "use application/json or the Latch v1 media type", "")
+		return
+	}
+	request.Body = http.MaxBytesReader(response, request.Body, h.maxBodyBytes)
+	payload, err := io.ReadAll(request.Body)
+	if err != nil {
+		h.writeError(response, http.StatusRequestEntityTooLarge, "request_too_large", "request body exceeds the configured limit", "")
+		return
+	}
+	var input approvalRequest
+	if err := strictjson.DecodeDisallowUnknown(payload, &input); err != nil {
+		h.writeError(response, http.StatusBadRequest, "invalid_json", "request body must be one valid JSON object using only approval fields", "")
+		return
+	}
+	if input.APIVersion != api.APIVersion {
+		h.writeError(response, http.StatusBadRequest, "invalid_request", fmt.Sprintf("api_version must be %q", api.APIVersion), "")
+		return
+	}
+	approver := strings.TrimSpace(input.Approver)
+	if approver == "" || len(approver) > 256 {
+		h.writeError(response, http.StatusBadRequest, "invalid_request", "approver identity is required", "")
+		return
+	}
+	if input.TTLSeconds < 0 || input.TTLSeconds > 7*24*3600 {
+		h.writeError(response, http.StatusBadRequest, "invalid_request", "ttl_seconds must be between 0 and 604800", "")
+		return
+	}
+	action, err := h.normalizeApprovalAction(input.Action)
+	if err != nil {
+		h.writeError(response, http.StatusBadRequest, "invalid_action", err.Error(), "")
+		return
+	}
+	ttl := time.Duration(input.TTLSeconds) * time.Second
+	grant, err := h.service.ApprovalStore.Issue(action, "api:"+approver, ttl)
+	if err != nil {
+		h.writeError(response, http.StatusUnprocessableEntity, "approval_rejected", err.Error(), "")
+		return
+	}
+	fmt.Fprintf(h.diagnostics, "Latch: approval %s issued for %s by api:%s\n", grant.ID, grant.Tool, approver)
+	h.writeJSON(response, http.StatusCreated, map[string]any{
+		"api_version": api.APIVersion,
+		"grant": map[string]any{
+			"id": grant.ID, "fingerprint": grant.Fingerprint, "approver": grant.Approver,
+			"tool": grant.Tool, "expires_at": grant.ExpiresAt.UTC().Format(time.RFC3339),
+		},
+	})
+}
+
+func (h *Handler) normalizeApprovalAction(input api.Action) (models.Action, error) {
+	metadata := cloneMap(input.Metadata)
+	metadata["protocol"] = "latch-enforcement-api"
+	metadata["transport"] = "http"
+	metadata["surface"] = "approval"
+	action, err := normalize.Action(normalize.Request{
+		AgentID: input.AgentID, Tool: input.Tool, Arguments: input.Arguments, Metadata: metadata,
+	})
+	if err != nil {
+		return models.Action{}, err
+	}
+	if operation := strings.TrimSpace(input.Operation); operation != "" {
+		action.Operation = operation
+	}
+	if resource := strings.TrimSpace(input.Resource); resource != "" {
+		action.Resource = resource
+	}
+	if h.agentID != "" {
+		action.AgentID = h.agentID
+	}
+	return action, nil
 }
 
 func (h *Handler) writeError(response http.ResponseWriter, status int, code, message, requestID string) {

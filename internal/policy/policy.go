@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -72,10 +73,20 @@ func (d Duration) Value() time.Duration { return time.Duration(d) }
 func (d Duration) String() string       { return time.Duration(d).String() }
 
 type ApprovalConfig struct {
-	StorePath   string   `yaml:"store_path"`
-	DefaultTTL  Duration `yaml:"default_ttl"`
-	MaxTTL      Duration `yaml:"max_ttl"`
-	LockTimeout Duration `yaml:"lock_timeout"`
+	StorePath   string         `yaml:"store_path"`
+	DefaultTTL  Duration       `yaml:"default_ttl"`
+	MaxTTL      Duration       `yaml:"max_ttl"`
+	LockTimeout Duration       `yaml:"lock_timeout"`
+	Notify      ApprovalNotify `yaml:"notify"`
+}
+
+// ApprovalNotify configures an out-of-band alert sent when an action is held
+// for human approval. It never affects a verdict; a failed alert only means no
+// notification was delivered.
+type ApprovalNotify struct {
+	WebhookURL string   `yaml:"webhook_url"`
+	Format     string   `yaml:"format"`
+	Timeout    Duration `yaml:"timeout"`
 }
 
 // BudgetConfig defines durable, per-agent limits for cumulative action volume.
@@ -255,6 +266,9 @@ func (c Config) Validate() error {
 	if c.Approvals.LockTimeout.Value() <= 0 {
 		return fmt.Errorf("approvals.lock_timeout must be positive")
 	}
+	if err := c.Approvals.Notify.validate(); err != nil {
+		return err
+	}
 	if err := c.Budgets.validate(); err != nil {
 		return err
 	}
@@ -297,6 +311,45 @@ func (c Config) Validate() error {
 		}
 	}
 	return nil
+}
+
+// validate checks the optional approval webhook. Plaintext HTTP is only
+// permitted to a loopback host so notifications cannot leak in transit.
+func (n ApprovalNotify) validate() error {
+	raw := strings.TrimSpace(n.WebhookURL)
+	if raw == "" {
+		return nil
+	}
+	switch strings.ToLower(strings.TrimSpace(n.Format)) {
+	case "", "generic", "slack":
+	default:
+		return fmt.Errorf("approvals.notify.format must be generic or slack")
+	}
+	if n.Timeout.Value() < 0 {
+		return fmt.Errorf("approvals.notify.timeout cannot be negative")
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		return fmt.Errorf("approvals.notify.webhook_url must be an absolute HTTP or HTTPS URL")
+	}
+	if parsed.User != nil {
+		return fmt.Errorf("approvals.notify.webhook_url cannot embed credentials")
+	}
+	if parsed.Scheme == "http" && !loopbackHost(parsed.Hostname()) {
+		return fmt.Errorf("approvals.notify.webhook_url must use HTTPS unless the host is loopback")
+	}
+	return nil
+}
+
+func loopbackHost(host string) bool {
+	host = strings.Trim(strings.TrimSpace(host), "[]")
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return ip.IsLoopback()
+	}
+	return false
 }
 
 func (budgets BudgetConfig) validate() error {

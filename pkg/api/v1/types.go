@@ -64,6 +64,14 @@ type PolicyResult struct {
 	Reasons        []string `json:"reasons,omitempty"`
 }
 
+// ApprovalChallenge is present only on a pending REQUIRE_APPROVAL response. It
+// gives an out-of-band approver the exact action fingerprint to grant, without
+// exposing the raw action arguments.
+type ApprovalChallenge struct {
+	Status      string `json:"status"`
+	Fingerprint string `json:"fingerprint"`
+}
+
 // DecisionResponse is returned with HTTP 200 for ALLOW, BLOCK, and
 // REQUIRE_APPROVAL. Clients must execute only an explicit ALLOW.
 type DecisionResponse struct {
@@ -75,6 +83,7 @@ type DecisionResponse struct {
 	Identity   Identity              `json:"identity"`
 	Policy     PolicyResult          `json:"policy"`
 	Budgets    []models.BudgetStatus `json:"budgets,omitempty"`
+	Approval   *ApprovalChallenge    `json:"approval,omitempty"`
 }
 
 // Error describes a contract or transport error. It never represents an

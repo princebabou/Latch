@@ -26,6 +26,13 @@ approvals:
   default_ttl: 15m
   max_ttl: 24h
   lock_timeout: 2s
+  # Optional out-of-band alert when an action is held for approval. Delivery is
+  # best-effort and never changes a verdict. Plain HTTP is only allowed to a
+  # loopback host; every other destination must be HTTPS.
+  # notify:
+  #   webhook_url: https://hooks.slack.com/services/T000/B000/XXXX
+  #   format: slack        # slack | generic (default generic)
+  #   timeout: 3s
 
 audit:
   path: .latch/audit.jsonl
