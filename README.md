@@ -453,17 +453,20 @@ reusable workflow and complete hardening contract.
 
 ## Current boundary
 
-Latch now secures MCP stdio, MCP Streamable HTTP, generic HTTP APIs, and
-OpenAI-compatible Responses API and Chat Completions function calls, alongside
-native LangChain middleware, protected LangGraph ToolNodes, fail-closed local
-process execution, a native CI adapter, packaged GitHub Action, reusable policy
-workflow, the stable Enforcement API, and official Go, Python, and TypeScript
-SDKs. A versioned cross-adapter conformance suite now certifies the decision,
-wire, and fail-closed client boundaries in CI. The local Policy Lab now runs
-editable policy and action experiments through the real evaluation engine,
-explains every result, and flags policy edits that weaken an outcome without
-touching tools or durable state. Observability is the next v0.2 milestone,
-followed by reference deployments.
+Latch now secures MCP stdio, MCP Streamable HTTP, generic HTTP APIs,
+OpenAI-compatible Responses API and Chat Completions function calls, and the
+Anthropic Messages API `tool_use` contract, alongside native LangChain
+middleware, protected LangGraph ToolNodes, fail-closed local process execution,
+a native CI adapter, packaged GitHub Action, reusable policy workflow, the
+stable Enforcement API, and official Go, Python, and TypeScript SDKs. Held
+actions can now be approved out of band through a webhook alert and a
+separate-token HTTP grant endpoint, and the deterministic risk engine parses
+PowerShell alongside POSIX shell, HTTP, and SQL. A versioned cross-adapter
+conformance suite certifies the decision, wire, and fail-closed client
+boundaries in CI. The local Policy Lab runs editable policy and action
+experiments through the real evaluation engine, explains every result, and
+flags policy edits that weaken an outcome without touching tools or durable
+state. Observability is the next milestone, followed by reference deployments.
 
 Run the suite with:
 
