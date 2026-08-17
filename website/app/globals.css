@@ -762,6 +762,59 @@ em {
   color: var(--amber);
 }
 
+.risk-meter {
+  border-bottom: 1px solid var(--line);
+  padding: 16px 24px 18px;
+}
+
+.risk-meter-head {
+  align-items: baseline;
+  display: flex;
+  gap: 14px;
+  margin-bottom: 10px;
+}
+
+.risk-meter-head span {
+  color: var(--faint);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.risk-meter-head code {
+  color: var(--ink-soft);
+  font-family: var(--mono);
+  font-size: 12.5px;
+  margin-left: auto;
+}
+
+.risk-track {
+  background: var(--paper-sunken);
+  border-radius: 999px;
+  height: 6px;
+  overflow: hidden;
+}
+
+.risk-fill {
+  background: var(--muted);
+  border-radius: 999px;
+  height: 100%;
+  transition: width 320ms ease;
+}
+
+.risk-meter.allow .risk-fill {
+  background: var(--green);
+}
+
+.risk-meter.require-approval .risk-fill {
+  background: var(--amber);
+}
+
+.risk-meter.block .risk-fill {
+  background: var(--red);
+}
+
 .assessment-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);

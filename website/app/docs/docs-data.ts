@@ -449,6 +449,58 @@ const messages = await tools.executeChatCompletion(completion);`,
     ],
   },
   {
+    slug: "anthropic-tools",
+    group: "Integrate",
+    title: "Anthropic tool use",
+    summary:
+      "Protect Claude Messages API tool_use blocks with whole-message authorization and replay defense.",
+    readingTime: "6 min",
+    sections: [
+      {
+        id: "adapter",
+        title: "Guard a Messages response",
+        paragraphs: [
+          "Register the tools your agent can invoke. The adapter accepts a completed assistant message, protects every tool_use block, and returns Anthropic-native tool_result content blocks to append to the next user message.",
+        ],
+        code: `from latch_sdk import LatchClient, AnthropicToolAdapter
+
+latch = LatchClient("http://127.0.0.1:7070", token="...")
+tools = AnthropicToolAdapter(latch, {
+    "get_weather": get_weather,
+})
+
+results = tools.execute_message(message)
+# append {"role": "user", "content": results} and continue the turn`,
+        language: "python",
+      },
+      {
+        id: "batch-safety",
+        title: "Authorize the whole message first",
+        bullets: [
+          "Every tool_use input must decode to a JSON object with interoperable Unicode and safe numbers.",
+          "Every tool name must have a registered local handler.",
+          "Every block must receive an explicit ALLOW before any handler starts.",
+          "Duplicate and redelivered tool_use IDs are rejected before side effects.",
+          "Non-assistant messages, protocol, Latch, and handler-output failures stay closed.",
+        ],
+      },
+      {
+        id: "typescript",
+        title: "TypeScript and Go",
+        paragraphs: [
+          "The same contract ships in every official SDK. Input arrives as a decoded object rather than an OpenAI-style argument string, so no separate JSON parse step is required.",
+        ],
+        code: `const tools = new AnthropicToolAdapter(latch, {
+  get_weather: async (input) => getWeather(input.city),
+});
+
+const results = await tools.executeMessage(message);`,
+        language: "typescript",
+        note: "Pass only completed assembled messages. Streaming deltas are not accepted by this tool-use adapter.",
+      },
+    ],
+  },
+  {
     slug: "langchain-langgraph",
     group: "Integrate",
     title: "LangChain & LangGraph",
@@ -573,6 +625,20 @@ const result = await shell.run({
     "python -m pytest | tee test.log",
 )`,
         language: "python",
+      },
+      {
+        id: "powershell",
+        title: "PowerShell-aware analysis",
+        paragraphs: [
+          "Command text that declares a PowerShell shell, or that contains PowerShell syntax, is parsed with a PowerShell grammar in addition to the POSIX pass: backtick escapes, subexpressions, script blocks, and Windows-native commands whose backslash paths POSIX lexing would corrupt.",
+        ],
+        bullets: [
+          "Download-to-Invoke-Expression and .NET DownloadString piped into an interpreter raise remote-script-execution.",
+          "Every -EncodedCommand abbreviation is caught while the -ep and -ex ExecutionPolicy flags are not misread as encoded commands.",
+          "Execution-policy bypass, hidden-window execution, and BITS transfers are surfaced.",
+          "Defender preference tampering is a hard-deny class; Run-key, scheduled-task, and Register-ScheduledTask persistence are flagged.",
+        ],
+        note: "PowerShell signals share the deterministic collector, so the dual pass never double-counts a behavior.",
       },
       {
         id: "privacy",
@@ -825,6 +891,21 @@ latch approvals revoke \\
   --reason "task complete"
 latch approvals prune`,
         note: "A policy change, action mismatch, identity mismatch, expiry, or revocation invalidates the grant. Blocks and hard-deny signals are never overridden.",
+      },
+      {
+        id: "remote-approvals",
+        title: "Remote approvals",
+        paragraphs: [
+          "When an agent runs without an operator at the CLI, Latch can alert a human out of band and accept the grant over HTTP. A held decision returns an approval challenge with the exact action fingerprint, and an optional webhook posts a redacted summary to Slack or a generic endpoint.",
+          "The /v1/approvals endpoint issues and lists grants, but only when a dedicated approver token is configured. That token must differ from the decision bearer token, so an agent can never approve its own held actions. Notification delivery is best-effort and never changes a verdict.",
+        ],
+        code: `export LATCH_API_TOKEN="$(openssl rand -hex 32)"
+export LATCH_APPROVER_TOKEN="$(openssl rand -hex 32)"
+latch serve --config latch.yaml --agent desktop-agent
+
+# approvals.notify.webhook_url in the policy posts a redacted
+# pending-action alert; HTTPS is required for non-loopback hosts.`,
+        note: "The approver token gates a separate duty. Without it, /v1/approvals is disabled and grants must be issued from the local CLI.",
       },
       {
         id: "audit",

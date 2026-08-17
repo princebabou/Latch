@@ -11,7 +11,7 @@ const guarantees = [
   },
   {
     title: "Deterministic risk",
-    copy: "Structured shell, HTTP, and SQL analysis produces concrete, repeatable signals — destructive behavior, credential movement, privilege escalation — not an opaque model judgment.",
+    copy: "Structured shell, PowerShell, HTTP, and SQL analysis produces concrete, repeatable signals — destructive behavior, credential movement, privilege escalation, persistence — not an opaque model judgment.",
   },
   {
     title: "Explainable outcomes",
@@ -31,6 +31,7 @@ const integrationGroups: [string, [string, string][]][] = [
   [
     "Framework adapters",
     [
+      ["Anthropic tool use", "Guarded Claude Messages API tool_use blocks in Go, Python, and TypeScript"],
       ["OpenAI-compatible tools", "Responses and Chat Completions function guards in Go, Python, and TypeScript"],
       ["LangChain & LangGraph", "Native middleware and whole-batch protected ToolNodes"],
       ["Local processes", "Fingerprint-bound argv and shell execution with replay protection"],
@@ -48,6 +49,7 @@ const integrationGroups: [string, [string, string][]][] = [
   [
     "Pipeline & tooling",
     [
+      ["Remote approvals", "Out-of-band webhook alerts and a separate-token HTTP grant endpoint"],
       ["CI/CD gate", "Native GitHub Action with summaries and typed outputs"],
       ["Conformance suite", "Versioned cross-adapter security corpus certification"],
       ["Policy Lab", "Actual-engine policy simulation, comparison, and weakening detection"],
@@ -161,7 +163,7 @@ export default function Home() {
               </div>
               <div>
                 <strong>Risk</strong>
-                <small>Deterministic shell, HTTP, SQL analysis</small>
+                <small>Deterministic shell, PowerShell, HTTP, SQL analysis</small>
               </div>
               <div>
                 <strong>Identity</strong>
